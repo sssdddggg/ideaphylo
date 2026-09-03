@@ -101,13 +101,51 @@ Editing in two tabs is detected rather than silently clobbered.
 One caveat worth knowing: `localStorage` is scoped to the origin the page is served from.
 Opening the same file from a different origin — a web host instead of `file://`, or another
 device — starts an empty tree. Carry it across with **Export as JSON** → **Import JSON
-file**; that path is lossless.
+file**; that path is lossless. When the tree has *already* ended up in several places, see
+**Collating copies** below.
 
-- **JSON** export/import — lossless, the format to trust for backups.
+- **JSON** export/import — lossless, the format to trust for backups. Files are dated
+  (`ideaphylo-2026-09-03.json`) and carry that date inside, so a pile of them can be told
+  apart and ordered later.
 - **Markdown** export — a plain indented outline that also round-trips back in through
   *Import outline*, statuses, Δ-lines and notes included.
 
 Both are in the ☰ menu, and both copy to the clipboard with a download as a fallback.
+
+## Collating copies
+
+The moment a tree exists at `file://`, on a web host, on a second device and in a couple of
+JSON files in Downloads, "where is my tree" stops having one answer. ☰ → **Collate copies**
+puts them all in one place.
+
+It finds every copy this page can reach on its own: the live tree, anything in this
+browser's storage that parses as an Ideaphylo store — whatever key it was written under,
+including keys from builds you no longer have — and the restore points. Files it cannot
+find, because no page is allowed to read your Downloads folder: **Add JSON files…** takes
+several at once, and dropping `.json` files anywhere on the page does the same.
+
+Then it shows you, per copy, exactly what differs:
+
+- **New ideas** — what that copy has and this one doesn't, one entry per clade
+  (`"C from the other device" + 4 below`), not one per idea.
+- **Worded differently** — the same idea, two texts. Both are shown in full, with Δ, note and
+  status; tap the one that should win.
+- **In another place** — the same idea under a different parent. Leave it, or move it.
+
+Every difference has a default — new ideas come in, a copy dated later than your last save
+wins a wording clash, position stays as it is here — and every default is one tap to flip,
+with **Bring all in / Skip all** style bulk switches per section. The running total at the
+top (`Result: 61 ideas (+12, 3 reworded)`) recomputes on every tap, so you see the outcome
+before you commit to it.
+
+Two things make this safe to reach for:
+
+- **A merge only ever adds.** An idea that exists here and not in the copy is never deleted,
+  whatever the copy says. A restore point is forced before the merge, and `⌘Z` undoes all of it.
+- **Merging twice does nothing the second time.** Ideas are matched by id, which survives
+  export and import, so a copy descended from the same tree lines up exactly. Ideas whose ids
+  have diverged are matched by identical text in the same position, which is what stops two
+  separately-typed copies of one outline from doubling.
 
 ## Rearranging
 

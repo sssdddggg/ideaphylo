@@ -215,6 +215,7 @@ body.mapmode main{display:none}
 .sheet .pair{display:flex;gap:8px;margin-top:10px}
 .sheet .pair button{flex:1;padding:12px;border-radius:3px;background:var(--card);border:1px solid var(--edge);font-size:15px}
 .sheet .pair button.pri{background:var(--ink);border-color:var(--ink);color:var(--paper);font-weight:600}
+.sheet .pair button[disabled]{opacity:.4}
 #toast{
   position:fixed;left:50%;bottom:calc(96px + var(--safeb));transform:translate(-50%,10px);
   background:var(--card2);border:1px solid var(--edge);color:var(--fg);padding:9px 14px;
@@ -223,6 +224,25 @@ body.mapmode main{display:none}
 }
 #toast.show{opacity:1;transform:translate(-50%,0)}
 #toast button{color:var(--fg);text-decoration:underline;font-weight:600;font-size:13.5px;pointer-events:auto;padding:2px 4px}
+/* ---------- collating copies ---------- */
+.srcrow{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:11px 8px;
+        border:1px solid var(--cardline);background:var(--card);border-radius:3px;margin-bottom:6px}
+.srcrow.on{border-color:var(--ink)}
+.srcrow .tick{width:16px;text-align:center;color:var(--faint);font-size:13px}
+.srcrow.on .tick{color:var(--fg)}
+.srcrow .grow{flex:1;min-width:0}
+.srcrow b{display:block;font-size:13.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.srcrow small{display:block;color:var(--dim);font-size:11.5px;margin-top:2px;line-height:1.35}
+.dcard{border:1px solid var(--cardline);background:var(--card);border-radius:3px;padding:8px;margin-bottom:8px}
+.dhead{font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:.5px;line-height:1.4}
+.dopt{display:block;width:100%;text-align:left;padding:8px;border:1px solid var(--edge);border-radius:3px;
+      font-size:13px;margin-top:6px;color:var(--dim);line-height:1.35}
+.dopt.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.dopt i{font-style:normal;font-size:11px;display:block;opacity:.75;margin-bottom:2px}
+.mnote{font-size:12px;color:var(--dim);line-height:1.55;margin:10px 2px}
+#sheetMerge .pair{position:sticky;bottom:0;background:var(--bg2);margin-top:12px;
+                  padding:8px 0 2px;border-top:1px solid var(--line)}
+.mnote b{color:var(--fg)}
 .help{font-size:13.5px;line-height:1.65;color:var(--dim)}
 .help b{color:var(--fg)}
 .help kbd{background:var(--card);border:1px solid var(--edge);border-radius:2px;padding:1px 5px;font-size:12px}
@@ -328,7 +348,8 @@ body.mapmode main{display:none}
     <button data-m="paste"><em>⤓</em>Import outline (paste text)</button>
     <button data-m="exportmd"><em>↗</em>Export as Markdown</button>
     <button data-m="exportjson"><em>{}</em>Export as JSON</button>
-    <button data-m="importjson"><em>⤒</em>Import JSON file</button>
+    <button data-m="importjson"><em>⤒</em>Import JSON file (replaces)</button>
+    <button data-m="collate"><em>⑃</em>Collate copies &amp; merge <small id="collateLine"></small></button>
     <button data-m="restore"><em>↺</em>Restore a saved point <small id="snapLine"></small></button>
     <button data-m="theme"><em>◐</em>Toggle theme</button>
     <button data-m="demo"><em>✦</em>Load example tree</button>
@@ -344,6 +365,16 @@ body.mapmode main{display:none}
   <div class="pair"><button id="textCancel">Cancel</button><button id="textOk" class="pri">Save</button></div>
 </div>
 
+<div class="sheet" id="sheetMerge">
+  <div class="grab"></div>
+  <h3 id="mergeTitle">Collate copies</h3>
+  <div id="mergeBody"></div>
+  <div class="pair">
+    <button id="mergeBack">Cancel</button>
+    <button id="mergeGo" class="pri">Compare</button>
+  </div>
+</div>
+
 <div class="sheet" id="sheetHelp">
   <div class="grab"></div>
   <h3>How it works</h3>
@@ -352,6 +383,7 @@ body.mapmode main{display:none}
 </div>
 
 <input type="file" id="fileIn" accept="application/json,.json" class="hide">
+<input type="file" id="fileMerge" accept="application/json,.json" multiple class="hide">
 <div id="toast"><span id="toastMsg"></span><button id="toastAct" class="hide"></button></div>
 
 <script>
@@ -477,9 +509,9 @@ const looksLikeStore = d => !!d && typeof d === "object" && !!d.nodes
 function readSnaps(){
   try { const a = JSON.parse(lsGet(SNAPS)); return Array.isArray(a) ? a : []; } catch(_){ return []; }
 }
-function keepSnapshot(raw, count){
+function keepSnapshot(raw, count, force){
   const arr = readSnaps();
-  if(arr[0] && Date.now() - arr[0].at < SNAP_EVERY) return;
+  if(!force && arr[0] && Date.now() - arr[0].at < SNAP_EVERY) return;
   arr.unshift({ at: Date.now(), n: count, data: raw });
   while(arr.length > SNAP_KEEP) arr.pop();
   while(arr.length && !lsSet(SNAPS, JSON.stringify(arr))) arr.pop();   // shed oldest on quota
@@ -1501,6 +1533,374 @@ $("#fileIn").addEventListener("change", e => {
   r.readAsText(f); e.target.value = "";
 });
 
+/* ---------- collating copies of the tree ---------------------------------
+   The one thing this app cannot do for you is reach across origins: a tree
+   grown at file:// and a tree grown on a web host are two different stores,
+   and a JSON file in your Downloads folder is a third. So instead of one
+   true copy there is a way to put every copy side by side, see exactly how
+   they differ, and fold them into one.
+
+   Every copy this page can reach is found automatically — the live tree,
+   anything in this browser's storage that parses as an Ideaphylo store
+   (whatever key it was written under), and the restore points. Files have
+   to be handed over by hand: pick them, or drop them on the page.
+
+   Merging is by node id, which survives export and import, so a copy that
+   descends from the same tree lines up exactly. Ideas whose ids no longer
+   match are matched by identical text in the same place instead, which is
+   what keeps two independently-typed copies of the same outline from
+   doubling. Nothing is ever deleted by a merge: ideas only arrive.
+   ------------------------------------------------------------------------ */
+const CFIELDS = ["text", "note", "diverge", "status"];
+let MG = null;                    // the open collate session
+
+const forestOf = d => { const f = normalise(d); return { nodes:f.nodes, roots:f.roots }; };
+const sizeOf = f => Object.keys(f.nodes).length;
+function cloneForest(f){
+  const nodes = {};
+  for(const id in f.nodes){
+    const n = f.nodes[id];
+    nodes[id] = { id, text:n.text, note:n.note, diverge:n.diverge, status:n.status,
+                  parent:n.parent, children:n.children.slice(), collapsed:n.collapsed,
+                  hybrids:n.hybrids.slice(), created:n.created };
+  }
+  return { nodes, roots:f.roots.slice() };
+}
+const countIn = (f, id) => { let n = 1; f.nodes[id].children.forEach(c => n += countIn(f, c)); return n; };
+
+/* Which idea in `base` is which idea in `inc`. Ids first — they are stable across
+   export, import and every past version. Then, level by level, an unclaimed idea
+   with the same text in the same place, which is how two copies that were typed
+   out separately still line up instead of doubling. */
+function matchNodes(base, inc){
+  const map = new Map(), claimed = new Set();
+  for(const id in inc.nodes) if(base.nodes[id]){ map.set(id, id); claimed.add(id); }
+  const level = (incIds, baseIds) => {
+    incIds.forEach(iid => {
+      if(!map.has(iid)){
+        const t = (inc.nodes[iid].text || "").trim().toLowerCase();
+        const hit = t && baseIds.find(bid => !claimed.has(bid)
+                      && (base.nodes[bid].text || "").trim().toLowerCase() === t);
+        if(hit){ map.set(iid, hit); claimed.add(hit); }
+      }
+      const b = map.get(iid);
+      level(inc.nodes[iid].children, b ? base.nodes[b].children : []);
+    });
+  };
+  level(inc.roots, base.roots);
+  return map;
+}
+/* What one copy would change about the base, as a list of decisions.
+   An idea missing from the base is one item for the whole clade below it —
+   you accept or skip a graft, not 40 separate ideas. */
+function planFor(base, src, si){
+  const map = matchNodes(base, src);
+  const items = [];
+  let same = 0;
+  const walk = iid => {
+    const inc = src.nodes[iid], bid = map.get(iid);
+    if(!bid){
+      items.push({ key:si+":"+iid+":add", kind:"add", si, iid,
+                   under: inc.parent ? map.get(inc.parent) || null : null,
+                   n: countIn(src, iid) - 1 });
+      return;                                   // its descendants come with it
+    }
+    const b = base.nodes[bid];
+    if(CFIELDS.some(f => (inc[f] || "") !== (b[f] || "")))
+      items.push({ key:si+":"+iid+":text", kind:"text", si, iid, bid });
+    else same++;
+    const want = inc.parent ? map.get(inc.parent) || null : null;
+    if(want !== b.parent) items.push({ key:si+":"+iid+":move", kind:"move", si, iid, bid, to:want });
+    inc.children.forEach(walk);
+  };
+  src.roots.forEach(walk);
+  const held = new Set(map.values());
+  return { si, map, items, same, onlyHere: Object.keys(base.nodes).filter(id => !held.has(id)).length };
+}
+/* Newer copies win a text conflict by default; position and everything else
+   defaults to what is already here. Every default is overridable, one by one. */
+function defaultFor(item, src){
+  if(item.kind === "add") return "theirs";
+  if(item.kind === "text") return src.at > (lastSaved || 0) ? "theirs" : "mine";
+  return "mine";
+}
+function graft(out, src, iid, under, map){
+  let n = 0;
+  const plant = (sid, parent) => {
+    const s = src.nodes[sid];
+    const id = out.nodes[sid] ? uid() : sid;    // keep the id when it is free
+    out.nodes[id] = { id, text:s.text, note:s.note, diverge:s.diverge, status:s.status,
+                      parent:parent || null, children:[], collapsed:s.collapsed,
+                      hybrids:[], created:s.created };
+    map.set(sid, id); n++;
+    if(parent) out.nodes[parent].children.push(id); else out.roots.push(id);
+    s.children.forEach(c => plant(c, id));
+  };
+  plant(iid, under && out.nodes[under] ? under : null);
+  return n;
+}
+function moveTo(out, id, target){
+  if(target && !out.nodes[target]) return false;
+  for(let c = target; c; c = out.nodes[c].parent) if(c === id) return false;   // no cycles
+  const n = out.nodes[id];
+  const arr = n.parent ? out.nodes[n.parent].children : out.roots;
+  const i = arr.indexOf(id); if(i > -1) arr.splice(i, 1);
+  n.parent = target || null;
+  (target ? out.nodes[target].children : out.roots).push(id);
+  return true;
+}
+/* Fold every enabled copy into the base and hand back the result. Pure: it reads
+   the sources and the decisions and touches nothing, so the review screen can
+   rebuild it from scratch after every tap and always show the real outcome. */
+function mergeInto(baseForest, plans, srcs, decisions){
+  const out = cloneForest(baseForest);
+  const stats = { added:0, edited:0, moved:0, skipped:0 };
+  plans.forEach(p => {
+    const src = srcs[p.si].forest, map = new Map(p.map);
+    const chosen = it => decisions[it.key] || defaultFor(it, srcs[p.si]);
+    p.items.forEach(it => {
+      if(it.kind !== "add") return;
+      if(chosen(it) === "skip"){ stats.skipped += it.n + 1; return; }
+      stats.added += graft(out, src, it.iid, it.under, map);
+      if(!stats.first) stats.first = map.get(it.iid);
+    });
+    p.items.forEach(it => {
+      if(chosen(it) !== "theirs") return;
+      if(it.kind === "text"){
+        const b = out.nodes[it.bid]; if(!b) return;
+        CFIELDS.forEach(f => { b[f] = src.nodes[it.iid][f]; });
+        stats.edited++;
+      } else if(it.kind === "move"){
+        if(moveTo(out, it.bid, it.to)) stats.moved++;
+      }
+    });
+    map.forEach((bid, iid) => {                 // ⤳ links are additive, never a conflict
+      const b = out.nodes[bid], inc = src.nodes[iid];
+      if(!b || !inc) return;
+      inc.hybrids.forEach(h => {
+        const t = map.get(h);
+        if(t && t !== bid && out.nodes[t] && !b.hybrids.includes(t)) b.hybrids.push(t);
+      });
+    });
+  });
+  const fixed = normalise({ nodes:out.nodes, roots:out.roots });
+  return { forest:{ nodes:fixed.nodes, roots:fixed.roots }, stats };
+}
+
+/* ---------- finding the copies ---------- */
+function discoverSources(){
+  const live = forestOf({ nodes:S.nodes, roots:S.roots });
+  const empty = !sizeOf(live);
+  const out = [{ kind:"live", label:"This browser, right now", at:Date.now(),
+                 forest:live, n:sizeOf(live), on:true }];
+  try{
+    for(let i = 0; i < localStorage.length; i++){
+      const k = localStorage.key(i);
+      if(k === SNAPS) continue;
+      let d = null;
+      try { d = JSON.parse(localStorage.getItem(k)); } catch(_){ continue; }
+      if(!looksLikeStore(d)) continue;
+      const f = forestOf(d);
+      if(!sizeOf(f)) continue;
+      const at = typeof d.savedAt === "number" ? d.savedAt : 0;
+      out.push({ kind:"stored", at, forest:f, n:sizeOf(f),
+                 label: k === KEY ? "Saved in this browser" : "Another store — “" + k + "”",
+                 note: at ? "saved " + ago(at) : "no date recorded",
+                 on: k === KEY ? empty : true });
+    }
+  }catch(_){}
+  readSnaps().forEach(sn => {
+    let d = null;
+    try { d = JSON.parse(sn.data); } catch(_){}
+    if(!looksLikeStore(d)) return;
+    const f = forestOf(d);
+    if(!sizeOf(f)) return;
+    out.push({ kind:"snap", at:sn.at, forest:f, n:sizeOf(f),
+               label:"Restore point · " + ago(sn.at),
+               note:"older — can bring back ideas you deleted since", on:false });
+  });
+  return out;
+}
+function addFiles(list){
+  const files = Array.from(list || []);
+  if(!files.length) return;
+  let pending = files.length, bad = 0;
+  files.forEach(f => {
+    const r = new FileReader();
+    r.onload = () => {
+      let d = null;
+      try { d = JSON.parse(r.result); } catch(_){}
+      if(looksLikeStore(d)){
+        const forest = forestOf(d);
+        if(sizeOf(forest)){
+          const at = typeof d.savedAt === "number" ? d.savedAt : (f.lastModified || 0);
+          MG.srcs.push({ kind:"file", at, forest, n:sizeOf(forest), on:true,
+                         label:f.name, note: at ? "dated " + ago(at) : "no date recorded" });
+        } else bad++;
+      } else bad++;
+      if(!--pending) doneFiles(bad, files.length);
+    };
+    r.onerror = () => { bad++; if(!--pending) doneFiles(bad, files.length); };
+    r.readAsText(f);
+  });
+}
+function doneFiles(bad, total){
+  MG.step = "sources"; renderMerge();
+  if(bad) toast(bad === total ? (total === 1 ? "That file isn’t an Ideaphylo export" : "None of those are Ideaphylo exports")
+                              : bad + " of " + total + " weren’t Ideaphylo exports");
+}
+
+/* ---------- the collate sheet ---------- */
+function collateOpen(files){
+  MG = { step:"sources", srcs:discoverSources(), decisions:{}, plans:[] };
+  renderMerge(); showSheet("#sheetMerge");
+  if(files) addFiles(files);
+}
+function compareSources(){
+  const base = MG.srcs[0].forest;
+  MG.plans = MG.srcs.map((s, i) => (i && s.on) ? planFor(base, s.forest, i) : null).filter(Boolean);
+  MG.step = "review"; renderMerge();
+}
+const DCAP = 20;                                  // cards shown per section before "…and n more"
+function renderMerge(){
+  const body = $("#mergeBody"), back = $("#mergeBack"), go = $("#mergeGo");
+  if(MG.step === "sources"){
+    $("#mergeTitle").textContent = "Collate copies";
+    const rows = MG.srcs.map((s, i) => i === 0
+      ? `<div class="srcrow on"><span class="tick">●</span><span class="grow"><b>${esc(s.label)}</b>
+         <small>${s.n} ${s.n === 1 ? "idea" : "ideas"} · everything merges into this one</small></span></div>`
+      : `<button class="srcrow${s.on ? " on" : ""}" data-src="${i}"><span class="tick">${s.on ? "✓" : "○"}</span>
+         <span class="grow"><b>${esc(s.label)}</b><small>${s.n} ${s.n === 1 ? "idea" : "ideas"}${s.note ? " · " + esc(s.note) : ""}</small></span></button>`
+    ).join("");
+    body.innerHTML = rows +
+      `<button class="srcrow" data-addfiles="1"><span class="tick">＋</span><span class="grow">
+         <b>Add JSON files…</b><small>exports you have downloaded — several at once</small></span></button>
+       <div class="mnote">Everything this page can reach is already listed. A file has to be handed
+       over by hand: pick it above, or drop it anywhere on the page — the browser will not let a page
+       read your Downloads folder on its own.<br><br>
+       Merging only ever <b>adds</b>. Nothing here is deleted, and you see every difference before
+       anything is applied.</div>`;
+    back.textContent = "Cancel";
+    const on = MG.srcs.filter((s, i) => i && s.on).length;
+    go.textContent = on ? "Compare " + on + (on === 1 ? " copy" : " copies") : "Nothing to compare";
+    go.disabled = !on;
+    return;
+  }
+  // ---- review
+  $("#mergeTitle").textContent = "What differs";
+  const { stats } = mergeInto(MG.srcs[0].forest, MG.plans, MG.srcs, MG.decisions);
+  const all = [];
+  MG.plans.forEach(p => p.items.forEach(it => all.push(it)));
+  const pick = k => all.filter(it => it.kind === k);
+  const dec = it => MG.decisions[it.key] || defaultFor(it, MG.srcs[it.si]);
+  const from = it => esc(MG.srcs[it.si].label);
+  const txt = (f, id, l) => esc(short(f.nodes[id].text || "(empty idea)", l || 60));
+  const opt = (it, val, head, line) =>
+    `<button class="dopt${dec(it) === val ? " on" : ""}" data-key="${it.key}" data-pick="${val}">
+       <i>${head}</i>${line}</button>`;
+  let h = "";
+  const section = (title, list, cardFn, bulk) => {
+    if(!list.length) return;
+    h += `<div class="sect">${title} (${list.length})</div>`;
+    if(bulk) h += `<div class="rowbtns">${bulk}</div>`;
+    h += list.slice(0, DCAP).map(cardFn).join("");
+    if(list.length > DCAP) h += `<div class="mnote">…and ${list.length - DCAP} more, left as chosen above.</div>`;
+  };
+  MG.plans.forEach(p => {
+    const s = MG.srcs[p.si];
+    const c = { add:0, text:0, move:0 };
+    p.items.forEach(it => c[it.kind]++);
+    h += `<div class="mnote"><b>${esc(s.label)}</b> · ${c.add} to bring in · ${c.text} worded differently
+          · ${c.move} in another place · ${p.same} identical · ${p.onlyHere} here that it doesn’t have</div>`;
+  });
+  section("New ideas", pick("add"), it => {
+    const f = MG.srcs[it.si].forest;
+    const under = it.under && MG.srcs[0].forest.nodes[it.under]
+      ? "under “" + txt(MG.srcs[0].forest, it.under, 24) + "”" : "as its own root lineage";
+    return `<div class="dcard"><div class="dhead">From ${from(it)} · ${under}</div>
+      ${opt(it, "theirs", "Bring in", `“${txt(f, it.iid, 46)}”${it.n ? " + " + it.n + " below" : ""}`)}
+      ${opt(it, "skip", "Skip", "leave it out")}</div>`;
+  }, `<button data-bulk="add:theirs">Bring all in</button><button data-bulk="add:skip">Skip all</button>`);
+  section("Worded differently", pick("text"), it => {
+    const f = MG.srcs[it.si].forest, b = MG.srcs[0].forest;
+    const STLABEL = { strong:"★ thriving", dead:"✕ dead end", question:"? untested" };
+    const line = (fo, id) => {
+      const n = fo.nodes[id];
+      return esc(short(n.text || "(empty)", 160))
+        + (n.diverge ? `<br>Δ ${esc(short(n.diverge, 120))}` : "")
+        + (n.note ? `<br>≡ ${esc(short(n.note, 120))}` : "")
+        + (n.status ? `<br>${esc(STLABEL[n.status] || n.status)}` : "");
+    };
+    return `<div class="dcard"><div class="dhead">From ${from(it)}</div>
+      ${opt(it, "mine", "Keep what is here", line(b, it.bid))}
+      ${opt(it, "theirs", "Take theirs", line(f, it.iid))}</div>`;
+  }, `<button data-bulk="text:mine">Keep all mine</button><button data-bulk="text:theirs">Take all theirs</button>`);
+  section("In another place", pick("move"), it => {
+    const f = MG.srcs[it.si].forest, b = MG.srcs[0].forest;
+    const bp = b.nodes[it.bid].parent;
+    return `<div class="dcard"><div class="dhead">From ${from(it)} · “${txt(f, it.iid, 40)}”</div>
+      ${opt(it, "mine", "Leave it", bp && b.nodes[bp] ? "under “" + txt(b, bp, 30) + "”" : "as a root lineage")}
+      ${opt(it, "theirs", "Move it", it.to && b.nodes[it.to] ? "under “" + txt(b, it.to, 30) + "”" : "to a root lineage")}</div>`;
+  }, `<button data-bulk="move:mine">Leave all</button><button data-bulk="move:theirs">Move all</button>`);
+  if(!all.length) h += `<div class="mnote">Nothing differs — every copy you picked is already in this tree.</div>`;
+  const now = sizeOf(MG.srcs[0].forest);
+  body.innerHTML = `<div class="mnote">Result: <b>${now + stats.added} ideas</b>
+      (${stats.added ? "+" + stats.added : "no new ideas"}${stats.edited ? ", " + stats.edited + " reworded" : ""}${stats.moved ? ", " + stats.moved + " moved" : ""}${stats.skipped ? ", " + stats.skipped + " skipped" : ""}).
+      Nothing is deleted.</div>` + h;
+  back.textContent = "Back";
+  go.textContent = (stats.added || stats.edited || stats.moved) ? "Merge" : "Nothing to merge";
+  go.disabled = !(stats.added || stats.edited || stats.moved);
+}
+function applyMerge(){
+  const { forest, stats } = mergeInto(MG.srcs[0].forest, MG.plans, MG.srcs, MG.decisions);
+  pushUndo();
+  keepSnapshot(serialise(), totalNodes(), true);      // a merge always earns a restore point
+  S.nodes = forest.nodes; S.roots = forest.roots;
+  if(S.focus && !S.nodes[S.focus]) S.focus = null;
+  if(sel && !S.nodes[sel]) sel = null;
+  MG = null; closeSheet();
+  if(stats.first && S.nodes[stats.first]){      // land on the first thing that arrived
+    revealNode(stats.first); sel = stats.first;
+  }
+  render(); writeNow();
+  if(stats.first && S.nodes[stats.first]) setTimeout(() => scrollToNode(stats.first, true), 60);
+  toast(`Merged · +${stats.added} ideas`
+        + (stats.edited ? ", " + stats.edited + " reworded" : "")
+        + (stats.moved ? ", " + stats.moved + " moved" : ""), "Undo", undo);
+}
+$("#sheetMerge").addEventListener("click", e => {
+  if(!MG) return;
+  const src = e.target.closest("[data-src]");
+  if(src){ const i = +src.dataset.src; MG.srcs[i].on = !MG.srcs[i].on; renderMerge(); return; }
+  if(e.target.closest("[data-addfiles]")){ $("#fileMerge").click(); return; }
+  const bulk = e.target.closest("[data-bulk]");
+  if(bulk){
+    const [kind, val] = bulk.dataset.bulk.split(":");
+    MG.plans.forEach(p => p.items.forEach(it => { if(it.kind === kind) MG.decisions[it.key] = val; }));
+    renderMerge(); return;
+  }
+  const opt = e.target.closest("[data-pick]");
+  if(opt){ MG.decisions[opt.dataset.key] = opt.dataset.pick; renderMerge(); }
+});
+$("#mergeBack").addEventListener("click", () => {
+  if(MG && MG.step === "review"){ MG.step = "sources"; renderMerge(); }
+  else { MG = null; closeSheet(); }
+});
+$("#mergeGo").addEventListener("click", () => {
+  if(!MG) return;
+  if(MG.step === "sources") compareSources(); else applyMerge();
+});
+$("#fileMerge").addEventListener("change", e => { addFiles(e.target.files); e.target.value = ""; });
+/* Dropping exports on the page is the shortest path from a Downloads folder to here. */
+window.addEventListener("dragover", e => { if(e.dataTransfer) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; } });
+window.addEventListener("drop", e => {
+  const files = e.dataTransfer && Array.from(e.dataTransfer.files).filter(f => /\.json$/i.test(f.name));
+  if(!files || !files.length) return;
+  e.preventDefault();
+  if(MG && openSheet === $("#sheetMerge")) addFiles(files); else collateOpen(files);
+});
+const stamped = ext => "ideaphylo-" + new Date().toISOString().slice(0, 10) + "." + ext;
+
 /* ---------- menu ---------- */
 function updateStat(){
   const bytes = (lsGet(KEY) || "").length;
@@ -1511,6 +1911,8 @@ function updateStat(){
   const snaps = readSnaps();
   $("#snapLine").textContent = snaps.length ? snaps.length + " kept" : "none yet";
   $("#spreadLine").textContent = S.spread !== false ? "on" : "off";
+  const others = discoverSources().length - 1;
+  $("#collateLine").textContent = others ? others + " found" : "none found";
 }
 $("#btnMenu").addEventListener("click", () => { updateStat(); showSheet("#sheetMenu"); });
 $("#sheetMenu").addEventListener("click", e => {
@@ -1526,9 +1928,13 @@ $("#sheetMenu").addEventListener("click", e => {
     toast(S.spread ? "Each draw lands as far from the last ones as the tree allows"
                    : "Draws are now plain chance, anywhere in the tree");
   }
-  if(m === "exportmd") copyOrDownload("ideaphylo.md", toMarkdown(), "text/markdown");
-  if(m === "exportjson") copyOrDownload("ideaphylo.json", JSON.stringify({nodes:S.nodes, roots:S.roots}, null, 1), "application/json");
+  if(m === "exportmd") copyOrDownload(stamped("md"), toMarkdown(), "text/markdown");
+  /* The export carries its own date so copies collected later can be told apart and
+     ordered — see "Collate copies". Older exports without one still read fine. */
+  if(m === "exportjson") copyOrDownload(stamped("json"),
+      JSON.stringify({ v:SCHEMA, savedAt:Date.now(), nodes:S.nodes, roots:S.roots }, null, 1), "application/json");
   if(m === "importjson") $("#fileIn").click();
+  if(m === "collate") collateOpen();
   if(m === "restore") restoreSheet();
   if(m === "theme"){ setTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light"); }
   if(m === "demo"){ closeSheet(); askChoice("Load the example tree?", [
@@ -1608,7 +2014,16 @@ function showHelp(){
       <li>The tree survives new versions of this file: the store is repaired and migrated on open,
       never replaced. If it ever can't be read it is left untouched and you are offered the
       <b>restore points</b> (☰ menu) instead — up to three, one per six hours of use.</li>
-      <li>Export to JSON (to reload later) or Markdown (to paste anywhere) from the ☰ menu.</li>
+      <li>Export to JSON (to reload later) or Markdown (to paste anywhere) from the ☰ menu.
+      Exports are dated, and a JSON export carries the date inside it too.</li>
+      <li><b>⑃ Collate copies</b> is for when the same tree has ended up in more than one place —
+      a copy at <i>file://</i> and another on a web host, an export sitting in Downloads, a restore
+      point. It finds every copy this page can reach, you add any JSON files by hand (or drop them
+      on the page), and it shows you exactly how they differ: what each copy would <b>bring in</b>,
+      what it <b>words differently</b>, what it puts <b>somewhere else</b>. Choose a side per
+      difference, or in bulk, watch the result count change, then merge. Ideas are matched by
+      identity, so a copy of the same tree lines up rather than doubling — and a merge only ever
+      adds. Nothing is deleted, a restore point is taken first, and ⌘Z undoes the whole thing.</li>
       <li>On iOS, <i>Share → Add to Home Screen</i> makes it open like an app.</li>
     </ul>
     <div class="sect">On a keyboard</div>
