@@ -141,7 +141,7 @@ body.mapmode main{display:none}
   flex:0 0 auto; background:var(--bg2); border-top:1px solid var(--line);
   padding:8px 10px calc(8px + var(--safeb));
 }
-#target{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--dim);margin-bottom:6px;min-height:20px}
+#target{display:flex;align-items:center;flex-wrap:wrap;gap:5px;font-size:12.5px;color:var(--dim);margin-bottom:6px;min-height:20px}
 #target .chip{
   display:inline-flex;align-items:center;gap:5px;max-width:100%;
   background:var(--card);border:1px solid var(--edge);border-radius:20px;padding:3px 10px;
@@ -150,7 +150,7 @@ body.mapmode main{display:none}
 #target .chip.root{color:var(--dim)}
 #target .x{color:var(--dim);font-size:14px;padding:0 2px}
 #target .mode{margin-left:auto;display:flex;gap:4px;flex:0 0 auto}
-#target .mode button{padding:3px 9px;border-radius:20px;border:1px solid var(--edge);font-size:12px;color:var(--dim)}
+#target .mode button{padding:3px 8px;border-radius:20px;border:1px solid var(--edge);font-size:12px;color:var(--dim);white-space:nowrap}
 #target .mode button.on{background:var(--accent2);border-color:var(--accent2);color:#fff}
 #inputrow{display:flex;gap:8px;align-items:flex-end}
 #entry{
@@ -210,7 +210,7 @@ body.mapmode main{display:none}
   display:flex;align-items:center;gap:10px;max-width:92vw;
 }
 #toast.show{opacity:1;transform:translate(-50%,0)}
-#toast button{color:var(--accent);font-weight:600;font-size:13.5px}
+#toast button{color:var(--accent);font-weight:600;font-size:13.5px;pointer-events:auto;padding:2px 4px}
 .help{font-size:13.5px;line-height:1.65;color:var(--dim)}
 .help b{color:var(--fg)}
 .help kbd{background:var(--card);border:1px solid var(--edge);border-radius:5px;padding:1px 5px;font-size:12px}
@@ -268,6 +268,7 @@ body.mapmode main{display:none}
   <div class="acts">
     <button data-act="child"><em>↳</em>Branch</button>
     <button data-act="sibling"><em>⇢</em>Sibling</button>
+    <button data-act="ancestor"><em>↰</em>Ancestor</button>
     <button data-act="edit"><em>✎</em>Edit</button>
     <button data-act="focus"><em>⌖</em>Focus</button>
     <button data-act="note"><em>🗒</em>Note</button>
@@ -276,7 +277,6 @@ body.mapmode main{display:none}
     <button data-act="hybrid"><em>⤳</em>Merge</button>
     <button data-act="indent"><em>→</em>Indent</button>
     <button data-act="outdent"><em>←</em>Outdent</button>
-    <button data-act="dup"><em>⧉</em>Copy</button>
     <button data-act="delete" class="danger"><em>🗑</em>Delete</button>
   </div>
   <div class="sect">Status</div>
@@ -290,6 +290,7 @@ body.mapmode main{display:none}
   <div class="rowbtns">
     <button data-act="up">↑ Move up</button>
     <button data-act="down">↓ Move down</button>
+    <button data-act="dup">⧉ Copy branch</button>
     <button data-act="collapse">⌄ Collapse all below</button>
   </div>
 </div>
@@ -340,7 +341,7 @@ const $$ = s => Array.from(document.querySelectorAll(s));
 
 let S = { nodes:{}, roots:[], focus:null, theme:null };
 let sel = null;              // selected node id
-let mode = "child";          // "child" | "sibling"
+let mode = "child";          // "child" | "sibling" | "ancestor"
 let query = "";
 let matches = new Set(), openForSearch = new Set();
 let pick = null;             // {kind:"move"|"hybrid", id}
@@ -451,6 +452,27 @@ function outdent(id){
   const p = N(n.parent);
   const gArr = p.parent ? N(p.parent).children : S.roots;
   return reparent(id, p.parent, gArr.indexOf(p.id) + 1);
+}
+/* Insert a new idea directly above `id` — it becomes the parent of `id` AND of every
+   sibling, since siblings by definition share a parent. Returns the new node's id. */
+function addParent(id){
+  const n = N(id);
+  const arr = siblingsOf(id);        // the live children array (or S.roots)
+  const group = arr.slice();
+  const p = makeNode("", n.parent);
+  arr.length = 0; arr.push(p.id);    // the new ancestor takes the group's place
+  group.forEach(k => { N(k).parent = p.id; p.children.push(k); });
+  return p.id;
+}
+/* Undo the group part of the above: pull every sibling but `keep` back out. */
+function unwrapOthers(pid, keep){
+  const p = N(pid);
+  const arr = p.parent ? N(p.parent).children : S.roots;
+  const others = p.children.filter(c => c !== keep);
+  if(!others.length) return;
+  p.children = p.children.filter(c => c === keep);
+  others.forEach(o => N(o).parent = p.parent);
+  arr.splice(arr.indexOf(pid) + 1, 0, ...others);
 }
 function shift(id, dir){
   const arr = siblingsOf(id), i = arr.indexOf(id), j = i + dir;
@@ -624,18 +646,24 @@ function renderCrumbs(){
 function renderTarget(){
   const t = $("#target");
   const modeBtns = `<span class="mode">
-      <button data-mode="child" class="${mode==="child"?"on":""}">↳ child</button>
-      <button data-mode="sibling" class="${mode==="sibling"?"on":""}">⇢ sibling</button>
+      <button data-mode="child" class="${mode==="child"?"on":""}">↳ under</button>
+      <button data-mode="sibling" class="${mode==="sibling"?"on":""}">⇢ beside</button>
+      <button data-mode="ancestor" class="${mode==="ancestor"?"on":""}">↰ above</button>
     </span>`;
   if(!sel || !N(sel)){
     t.innerHTML = `<span class="chip root">⌂ new root lineage</span>`;
     $("#entry").placeholder = totalNodes() ? "Plant a new root idea…" : "Plant an idea…";
     return;
   }
-  const verb = mode === "child" ? "descends from" : "sibling of";
-  t.innerHTML = `<span class="chip">${verb} <b style="font-weight:600">${esc(short(N(sel).text,20))}</b>
+  const sibs = siblingsOf(sel).length;
+  // the highlighted mode button already says *where* it lands, so the chip only names the target
+  const wrapAll = mode === "ancestor" && sibs > 1;
+  const label = wrapAll ? `all ${sibs} here` : short(N(sel).text, 18);
+  t.innerHTML = `<span class="chip"><b style="font-weight:600">${esc(label)}</b>
       <button class="x" data-clear="1">✕</button></span>${modeBtns}`;
-  $("#entry").placeholder = mode === "child" ? "A variation of this idea…" : "Another idea alongside…";
+  $("#entry").placeholder = mode === "child" ? "A variation of this…"
+    : mode === "sibling" ? "Another idea alongside…"
+    : wrapAll ? `What all ${sibs} share…` : "The idea above this…";
 }
 
 function scrollToNode(id, flash){
@@ -779,9 +807,9 @@ function parseOutline(raw){
 }
 /* grow a parsed outline into the tree. base = parent for depth-0 items,
    after = grow depth-0 items as successive siblings of this id instead.  */
-function insertItems(items, base, after){
+function insertItems(items, base, after, startLast){
   const stack = [];
-  let first = null, last = null, grown = 0;
+  let first = null, last = startLast || null, grown = 0;
   items.forEach(it => {
     if(it.meta){                       // attach to the idea it followed…
       if(last){ if(it.meta === "diverge") N(last).diverge = it.text; else N(last).note = it.text; return; }
@@ -806,6 +834,24 @@ function submitEntry(){
   if(!raw.trim()) return;
   pushUndo();
   const items = parseOutline(raw);
+  if(mode === "ancestor" && sel && items.some(it => !it.meta)){
+    const wrapped = siblingsOf(sel).length, keep = sel;
+    const head = items.find(it => !it.meta);
+    const pid  = addParent(sel);
+    N(pid).text = head.text;
+    if(head.status) N(pid).status = head.status;
+    // anything after the first idea nests under the new ancestor
+    const rest = items.slice(items.indexOf(head) + 1)
+                      .map(it => it.meta ? it : Object.assign({}, it, { depth: Math.max(0, it.depth - 1) }));
+    insertItems(rest, pid, null, pid);
+    sel = pid; mode = "child";
+    entry.value = ""; autosize(); $("#send").disabled = true;
+    render(); scrollToNode(pid, true);
+    if(wrapped > 1) toast(`Ancestor of all ${wrapped}`, "Just this one", () => {
+      pushUndo(); unwrapOthers(pid, keep); render(); scrollToNode(pid, true);
+    });
+    return;
+  }
   const base  = (mode === "child" && sel) ? sel : (sel ? N(sel).parent : null);
   const { first, after } = insertItems(items, base, (mode === "sibling" && sel) ? sel : null);
   if(!first){ undoStack.pop(); return; }
@@ -865,6 +911,7 @@ $("#sheetNode").addEventListener("click", e => {
   const after = () => { render(); scrollToNode(id, true); };
   if(act === "child"){ closeSheet(); sel = id; mode = "child"; render(); entry.focus(); return; }
   if(act === "sibling"){ closeSheet(); sel = id; mode = "sibling"; render(); entry.focus(); return; }
+  if(act === "ancestor"){ closeSheet(); sel = id; mode = "ancestor"; render(); entry.focus(); return; }
   if(act === "edit"){ closeSheet(); startEdit(id); return; }
   if(act === "focus"){ closeSheet(); S.focus = id; sel = id; render(); scroller.scrollTop = 0; return; }
   if(act === "note"){ closeSheet(); askText("Note", n.note, v => { pushUndo(); n.note = v; render(); },
@@ -1133,6 +1180,10 @@ function showHelp(){
     <div class="sect">Growing the tree</div>
     <ul>
       <li><b>Tap</b> an idea to select it. Everything you type in the bar below becomes its descendant.</li>
+      <li>The bar grows in three directions: <b>↳ child</b>, <b>⇢ sib</b> alongside, and <b>↰ anc</b> —
+      a new idea inserted <i>above</i>, for when you realise a set of ideas share an ancestor you hadn't written down.
+      Siblings share a parent by definition, so a new ancestor takes in every sibling; the toast offers
+      <b>Just this one</b> if you only meant to wrap the one idea.</li>
       <li><b>Tap it again</b> to edit the text in place.</li>
       <li><b>Long-press</b> for the full action sheet.</li>
       <li><b>Swipe right</b> on a row to make it descend from the idea above; <b>swipe left</b> to promote it up a level.</li>

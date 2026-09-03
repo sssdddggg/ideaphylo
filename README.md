@@ -29,9 +29,16 @@ like an app, full screen and offline.
 | **Focus** | make any idea the temporary root — how deep trees stay readable on a small screen |
 | **◱** | whole-tree overview; tap any node to jump to it |
 
-The compose bar always shows what a new idea will attach to, and whether it lands as a
-**child** or a **sibling**. Selection stays on the parent after each entry, so a burst of
-typing produces a fan of variants rather than a chain — dive in by tapping.
+The compose bar always shows what a new idea will attach to, and grows in three directions:
+
+- **↳ under** — a descendant. Selection stays on the parent after each entry, so a burst of
+  typing produces a fan of variants rather than a chain; dive in by tapping.
+- **⇢ beside** — a sibling, alongside.
+- **↰ above** — a new **ancestor**, inserted above, for when you realise a set of ideas
+  descend from something you hadn't written down yet. Siblings share a parent by
+  definition, so the new ancestor takes in *every* sibling — the toast offers
+  **Just this one** if you only meant to wrap the one idea. Used on a root, it becomes the
+  common ancestor of every root lineage.
 
 Paste a whole indented outline into the bar (spaces or tabs) and it grows the entire
 subtree at once.
