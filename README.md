@@ -107,6 +107,17 @@ to know about:
   afterwards — edit one and the other is untouched. Tap *Unlink source* on the toast if
   you would rather not record the provenance, or *As new lineage* to graft it as its own
   root instead.
+- **⇊ each** — one copy *per recipient*. Tap a clade and every one of its members inherits
+  its own independent copy. **⇄ tips** switches what counts as a member:
+  - **direct members** — the clade's own children, without descending into sub-clades.
+    `Colour` → `Animals` puts a copy under *Mammals* and under *Bird*.
+  - **tips** — every leaf below it, through any sub-clades.
+    The same call instead puts a copy under *Dog*, *Cat* and *Bird*.
+
+  This is how a trait gets distributed across a group: give `Colour` to each animal, then
+  to each plant, and each copy evolves on its own from there. Anything already inside the
+  clade being copied is skipped rather than fed back into itself, and a graft that would
+  plant more than 30 ideas asks first, with the count.
 - **⋯ → Dissolve** — deletes one idea and raises its children into its place. The inverse
   of **↰ above**, for when an intermediate idea turns out to be doing no work.
 

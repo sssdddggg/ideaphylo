@@ -258,6 +258,7 @@ body.mapmode main{display:none}
   <span id="bannerMode" class="hide">
     <button data-pk="move">⇱ move</button>
     <button data-pk="copy">⎘ copy</button>
+    <button data-pk="each">⇊ each</button>
   </span>
   <button id="bannerAlt" class="hide"></button>
   <button id="bannerCancel">Cancel</button>
@@ -308,6 +309,7 @@ body.mapmode main{display:none}
     <button data-act="down">↓ Move down</button>
     <button data-act="dup">⧉ Copy branch here</button>
     <button data-act="copyinto">⎘ Copy into…</button>
+    <button data-act="copyeach">⇊ Copy into each member of…</button>
     <button data-act="dissolve">⤒ Dissolve, raise its children</button>
     <button data-act="collapse">⌄ Collapse all below</button>
   </div>
@@ -656,27 +658,44 @@ function removeOnly(id){ // delete node, lift its children into its place
   if(sel === id) sel = kids[0] || n.parent || null;
   if(S.focus === id) S.focus = n.parent || null;
 }
-/* Deep-copy a clade under `parentId` (not yet linked into its children array).
-   Hybrid links that pointed inside the clade are remapped to the copies, so the
-   new clade is self-contained rather than tethered to the original's internals. */
-function cloneSubtree(srcId, parentId){
+/* A clade is captured to a plain template first, then planted from that template.
+   Planting never reads the live tree, so a clade can be planted many times — even
+   into its own neighbourhood — without each copy feeding the next. */
+function captureClade(id){
+  const s = N(id);
+  return { src:id, text:s.text, note:s.note, diverge:s.diverge, status:s.status,
+           collapsed:s.collapsed, hybrids:s.hybrids.slice(),
+           children:s.children.map(captureClade) };
+}
+/* Instantiate a template under `parentId` (caller links it into that node's children).
+   Hybrid links that pointed inside the captured clade are remapped onto this copy, so
+   the planting is self-contained; links pointing outside it are kept as they were. */
+function plantClade(cap, parentId){
   const map = {};
-  const walk = (sid, parent) => {
-    const s = N(sid);
-    const c = makeNode(s.text, parent);
-    c.note = s.note; c.diverge = s.diverge; c.status = s.status; c.collapsed = s.collapsed;
-    c.hybrids = s.hybrids.slice();
-    map[sid] = c.id;
-    s.children.forEach(k => c.children.push(walk(k, c.id)));
-    return c.id;
+  const walk = (c, parent) => {
+    const n = makeNode(c.text, parent);
+    n.note = c.note; n.diverge = c.diverge; n.status = c.status; n.collapsed = c.collapsed;
+    n.hybrids = c.hybrids.slice();
+    map[c.src] = n.id;
+    c.children.forEach(k => n.children.push(walk(k, n.id)));
+    return n.id;
   };
-  const rootId = walk(srcId, parentId);
-  Object.keys(map).forEach(sid => {
-    const c = N(map[sid]);
-    const seen = new Set();
-    c.hybrids = c.hybrids.map(h => map[h] || h).filter(h => !seen.has(h) && h !== c.id && (seen.add(h), true));
+  const rootId = walk(cap, parentId);
+  Object.keys(map).forEach(src => {
+    const n = N(map[src]), seen = new Set();
+    n.hybrids = n.hybrids.map(h => map[h] || h)
+                         .filter(h => N(h) && h !== n.id && !seen.has(h) && (seen.add(h), true));
   });
   return rootId;
+}
+const cloneSubtree = (srcId, parentId) => plantClade(captureClade(srcId), parentId);
+/* Who inside `targetId` receives a copy: its direct members, or every tip below it. */
+function cladeMembers(targetId, scope){
+  if(scope !== "tips") return N(targetId).children.slice();
+  const out = [];
+  const walk = id => { const n = N(id); if(!n.children.length) out.push(id); else n.children.forEach(walk); };
+  walk(targetId);
+  return out;
 }
 function duplicate(id){
   const newId = cloneSubtree(id, N(id).parent);
@@ -1127,6 +1146,7 @@ $("#sheetNode").addEventListener("click", e => {
     toast("Raised " + n2.children.length + " a layer", "Undo", undo); return;
   }
   if(act === "copyinto"){ closeSheet(); startPick("copy", id); return; }
+  if(act === "copyeach"){ closeSheet(); startPick("each", id); return; }
   if(act === "dup"){ pushUndo(); const nid = duplicate(id); closeSheet(); sel = nid; render(); scrollToNode(nid, true); toast("Branch copied"); return; }
   if(act === "delete"){
     const kids = countAll(id);
@@ -1172,19 +1192,22 @@ function askChoice(title, options){
 function refreshBanner(){
   const t = short(N(pick.id).text, 20), n = countAll(pick.id);
   const clade = n ? ` and its ${n} below` : "";
+  const tips = pick.scope === "tips";
   $("#bannerText").textContent =
       pick.kind === "move" ? `Tap where “${t}”${clade} should move to`
     : pick.kind === "copy" ? `Tap the idea that inherits a copy of “${t}”${clade}`
+    : pick.kind === "each" ? `Tap a clade — each of its ${tips ? "tips" : "direct members"} inherits its own copy of “${t}” (${n + 1} ${n ? "ideas" : "idea"})`
     : `Tap the second ancestor that “${t}” also draws on`;
-  const swap = pick.kind === "move" || pick.kind === "copy";
+  const swap = pick.kind !== "hybrid";
   $("#bannerMode").classList.toggle("hide", !swap);
   $$("#bannerMode button").forEach(b => b.classList.toggle("on", b.dataset.pk === pick.kind));
   const alt = $("#bannerAlt");
   alt.classList.toggle("hide", !swap);
-  alt.textContent = pick.kind === "copy" ? "As new lineage" : "Make root";
+  alt.textContent = pick.kind === "each" ? (tips ? "⇄ members" : "⇄ tips")
+                  : pick.kind === "copy" ? "As new lineage" : "Make root";
 }
 function startPick(kind, id){
-  pick = { kind, id };
+  pick = { kind, id, scope: "members" };
   $("#banner").classList.remove("hide");
   refreshBanner();
   if(S.focus){ S.focus = null; }
@@ -1199,6 +1222,10 @@ $("#bannerCancel").addEventListener("click", endPick);
 $("#bannerAlt").addEventListener("click", () => {
   if(!pick) return;
   const id = pick.id;
+  if(pick.kind === "each"){                       // the alt button carries the scope switch
+    pick.scope = pick.scope === "tips" ? "members" : "tips";
+    refreshBanner(); return;
+  }
   if(pick.kind === "move"){
     pushUndo(); reparent(id, null, null); endPick(); scrollToNode(id, true); toast("Now a root lineage");
   } else if(pick.kind === "copy"){
@@ -1217,6 +1244,37 @@ $("#tree").addEventListener("click", e => {
     pushUndo();
     if(!reparent(id, target, null)){ undoStack.pop(); toast("Can’t move a branch into itself"); return; }
     endPick(); sel = id; render(); scrollToNode(id, true); toast("Moved");
+  } else if(kind === "each"){
+    const scope = pick.scope;
+    // never plant inside the clade being copied: that is not a member of the destination
+    const all = cladeMembers(target, scope);
+    const dests = all.filter(d => !isAncestor(id, d));
+    if(!dests.length){
+      toast(all.length ? "Those are all inside the clade being copied"
+          : scope === "tips" ? "Nothing below there to receive it"
+          : `“${short(N(target).text,16)}” has no members yet`);
+      return;
+    }
+    const skipped = all.length - dests.length;
+    const per = countAll(id) + 1, total = dests.length * per;
+    const plant = () => {
+      pushUndo();
+      const cap = captureClade(id);
+      const planted = dests.map(d => {
+        const nid = plantClade(cap, d);
+        N(d).children.push(nid); N(d).collapsed = false;
+        const h = N(nid).hybrids; if(!h.includes(id)) h.unshift(id);
+        return nid;
+      });
+      endPick(); revealNode(planted[0]); sel = planted[0]; render(); scrollToNode(planted[0], true);
+      toast(`Planted in ${dests.length} ${dests.length === 1 ? "place" : "places"}`
+            + (skipped ? ` · skipped ${skipped} inside it` : ""), "Undo", undo);
+    };
+    if(total > 30){                              // a bulk graft this size deserves a look first
+      endPick();
+      askChoice(`Give each of the ${dests.length} ${scope === "tips" ? "tips" : "members"} of “${short(N(target).text,18)}” a copy of “${short(N(id).text,18)}”?`,
+        [{ label:`Yes — plants ${total} ideas`, fn: plant }]);
+    } else plant();
   } else if(kind === "copy"){
     pushUndo();
     const n = countAll(id) + 1;
@@ -1435,6 +1493,10 @@ function showHelp(){
       <li>Once you have tapped <b>⇱ move</b>, the bar at the top switches between <b>move</b> and <b>copy</b>:
       copy grafts a duplicate of the whole clade onto whatever you tap next, leaving the original where it is.
       The graft is marked <b>⤳</b> with where it was inherited from, and evolves independently from then on.</li>
+      <li><b>⇊ each</b> hands out one copy per recipient: tap a clade and every one of its members
+      inherits its own copy. <b>⇄ tips</b> switches between its <i>direct members</i> (not descending into
+      sub-clades) and every <i>tip</i> below it. Good for a trait that belongs to a whole group —
+      give <i>Colour</i> to each animal, then to each plant.</li>
       <li><b>Focus</b> (in the action sheet) makes any idea the temporary root, so deep trees stay readable on a phone. Use the breadcrumbs to climb back out.</li>
       <li><b>◱ Map</b> shows the whole tree as a classic cladogram. Tap any tip to jump to it.</li>
     </ul>
