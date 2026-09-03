@@ -24,6 +24,7 @@ like an app, full screen and offline.
 | **Tap** an idea | select it — what you type below becomes its descendant |
 | **Tap again** | edit the text in place |
 | **Long-press** | full action sheet |
+| **Selected row's controls** | `← raise` a layer · `→ nest` under the idea above · `⇱ move` anywhere in the tree · `⋯` for everything else |
 | **Swipe right / left** | re-parent: descend from the idea above / promote a level |
 | **Tap the circle** | collapse or expand a branch (the number is what's hidden) |
 | **Focus** | make any idea the temporary root — how deep trees stay readable on a small screen |
@@ -54,6 +55,13 @@ subtree at once.
 - **⤳ Merge** — a second ancestor, for ideas born where two lineages met. Drawn as a dashed
   arc in the overview.
 
+## Look
+
+Strictly monochrome, light and dark — ink on paper, greys only, hairline rules, no
+shadows or gradients. Hierarchy is carried by weight, indentation and inversion rather
+than by colour, which is what lets it read the same on an e-ink screen as on an LCD.
+Both themes are verified to contain no non-grey pixel.
+
 ## Keeping your work
 
 Saved to `localStorage` automatically; nothing leaves the device.
@@ -63,6 +71,20 @@ Saved to `localStorage` automatically; nothing leaves the device.
   *Import outline*, statuses, Δ-lines and notes included.
 
 Both are in the ☰ menu, and both copy to the clipboard with a download as a fallback.
+
+## Rearranging
+
+A selected idea carries its own controls, so nothing is hidden behind a gesture you have
+to know about:
+
+- **← raise** — the whole clade moves up a layer, descendants and all.
+- **→ nest** — it descends from the idea above instead.
+- **⇱ move** — then tap any destination: the clade moves there whole. Tap *Make root* to
+  cut it loose as its own lineage.
+- **⋯ → Dissolve** — deletes one idea and raises its children into its place. The inverse
+  of **↰ above**, for when an intermediate idea turns out to be doing no work.
+
+Swiping a row right or left does *nest* and *raise* too, once you know it's there.
 
 `⌘Z` undoes; every destructive action offers an undo.
 

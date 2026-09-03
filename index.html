@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
-<meta name="theme-color" content="#0e1116">
+<meta name="theme-color" content="#0a0a0a">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="description" content="Grow phylogenetic trees of ideas.">
@@ -11,21 +11,21 @@
 <style>
 /* ---------- tokens ---------- */
 :root{
-  --bg:#0d1117; --bg2:#11161d; --card:#1a212b; --card2:#232d3a;
-  --fg:#e6edf3; --dim:#8b98a8; --faint:#5c6875;
-  --line:#2b3642; --edge:#333f4d; --cardline:transparent;
-  --accent:#79c0ff; --accent2:#1f6feb;
-  --ok:#56d364; --warn:#e3b341; --dead:#6e7681; --danger:#ff7b72;
-  --r:12px; --mid:14px; --rail:20px;
+  /* strict monochrome: ink on paper, greys only — no hue anywhere */
+  --bg:#0a0a0a; --bg2:#101010; --card:#151515; --card2:#212121;
+  --fg:#f2f2f2; --dim:#9b9b9b; --faint:#6a6a6a;
+  --line:#2d2d2d; --edge:#3d3d3d; --cardline:#242424;
+  --ink:#f2f2f2; --paper:#0a0a0a; --dead:#787878;
+  --accent:var(--ink); --accent2:var(--ink); --danger:var(--ink);
+  --r:3px; --mid:14px; --rail:20px;
   --safeb:env(safe-area-inset-bottom,0px);
   --safet:env(safe-area-inset-top,0px);
 }
 :root[data-theme="light"]{
-  --bg:#f6f8fa; --bg2:#ffffff; --card:#ffffff; --card2:#eef2f6;
-  --fg:#1c2128; --dim:#5c6875; --faint:#8b98a8;
-  --line:#d5dce4; --edge:#c3ccd6; --cardline:#dde3ea;
-  --accent:#0969da; --accent2:#0969da;
-  --ok:#1a7f37; --warn:#9a6700; --dead:#8b98a8; --danger:#cf222e;
+  --bg:#fbfbfb; --bg2:#ffffff; --card:#ffffff; --card2:#f0f0f0;
+  --fg:#0f0f0f; --dim:#575757; --faint:#8a8a8a;
+  --line:#d9d9d9; --edge:#bfbfbf; --cardline:#e2e2e2;
+  --ink:#0f0f0f; --paper:#ffffff; --dead:#909090;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0;height:100%;overscroll-behavior:none}
@@ -50,8 +50,8 @@ header{
 .brand svg{opacity:.9}
 .hbtn{width:36px;height:36px;border-radius:9px;display:grid;place-items:center;font-size:17px;color:var(--dim)}
 .hbtn:active{background:var(--card2)}
-.hbtn.on{background:var(--card2);color:var(--accent)}
-#searchwrap{flex:1;display:flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--edge);border-radius:9px;padding:0 8px}
+.hbtn.on{background:var(--ink);color:var(--paper)}
+#searchwrap{flex:1;display:flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--edge);border-radius:3px;padding:0 8px}
 #searchwrap input{flex:1;background:none;border:0;outline:none;padding:8px 0;font-size:16px}
 #searchcount{font-size:12px;color:var(--dim);white-space:nowrap}
 
@@ -63,14 +63,14 @@ header{
 }
 #crumbs::-webkit-scrollbar{display:none}
 #crumbs b{color:var(--fg);font-weight:600}
-#crumbs .cr{white-space:nowrap;padding:3px 7px;border-radius:7px;background:var(--card);max-width:44vw;overflow:hidden;text-overflow:ellipsis}
+#crumbs .cr{white-space:nowrap;padding:3px 7px;border-radius:3px;background:var(--card);border:1px solid var(--cardline);max-width:44vw;overflow:hidden;text-overflow:ellipsis}
 #crumbs .sep{opacity:.5}
 #banner{
   flex:0 0 auto; display:flex; gap:8px; align-items:center; padding:9px 10px;
-  background:var(--accent2); color:#fff; font-size:13.5px; font-weight:500;
+  background:var(--ink); color:var(--paper); font-size:13.5px; font-weight:500;
 }
 #banner .grow{flex:1;min-width:0}
-#banner button{background:rgba(255,255,255,.18);padding:6px 11px;border-radius:8px;font-size:13px;white-space:nowrap}
+#banner button{border:1px solid var(--paper);padding:6px 11px;border-radius:3px;font-size:13px;white-space:nowrap}
 
 /* ---------- tree ---------- */
 main{flex:1 1 auto;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;position:relative}
@@ -85,39 +85,48 @@ main{flex:1 1 auto;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:
 .knob{flex:0 0 24px;display:flex;align-items:flex-start;justify-content:center;padding-top:4px}
 .knob i{
   display:grid;place-items:center;width:20px;height:20px;border-radius:50%;
-  border:2px solid var(--kc,var(--accent)); background:var(--bg);
-  font-style:normal;font-size:11px;line-height:1;font-weight:700;color:var(--kc,var(--accent));
+  border:1.5px solid var(--ink); background:var(--bg);
+  font-style:normal;font-size:11px;line-height:1;font-weight:700;color:var(--ink);
 }
-.knob i.leaf{width:11px;height:11px;margin:4.5px;background:var(--kc);border-color:var(--kc)}
+.knob i.leaf{width:9px;height:9px;margin:5.5px;background:var(--ink);border-color:var(--ink)}
 .body{
   flex:1;min-width:0;background:var(--card);border:1px solid var(--cardline);
-  border-radius:10px;padding:5px 10px 6px;margin:1.5px 0;
+  border-radius:3px;padding:5px 10px 6px;margin:1.5px 0;
 }
-.row.sel .body{border-color:var(--accent);background:var(--card2)}
-.row.flash .body{animation:flash .9s ease}
-@keyframes flash{0%{background:var(--accent2)}100%{background:var(--card)}}
+.row.sel .body{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink);background:var(--card2)}
+.row.sel .knob i{background:var(--ink);color:var(--paper)}
+.row.flash .body{animation:flash 1s ease}
+@keyframes flash{0%,35%{border-color:var(--ink);background:var(--card2)}100%{border-color:var(--cardline);background:var(--card)}}
 .txt{white-space:pre-wrap;overflow-wrap:anywhere;font-size:15px;line-height:1.32}
 .row.dead .txt{color:var(--dead);text-decoration:line-through;text-decoration-color:var(--dead)}
 .row.strong .txt{font-weight:600}
 .meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px}
 .meta:empty{display:none}
-.tag{font-size:11.5px;padding:1.5px 6px;border-radius:20px;background:var(--card2);color:var(--dim);border:1px solid var(--edge)}
-.tag.st-strong{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 45%,transparent)}
-.tag.st-dead{color:var(--dead)}
-.tag.st-question{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 45%,transparent)}
-.tag.hy{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 45%,transparent)}
+.tag{font-size:11px;padding:1px 6px;border-radius:2px;background:none;color:var(--dim);border:1px solid var(--edge);
+     letter-spacing:.4px;text-transform:uppercase}
+.tag.st-strong{color:var(--fg);border-color:var(--fg)}
+.tag.st-dead{color:var(--dead);border-color:var(--dead)}
+.tag.st-question{color:var(--dim)}
+.tag.hy{color:var(--fg);border-style:dashed}
 .note{font-size:13px;color:var(--dim);margin-top:3px;white-space:pre-wrap;overflow-wrap:anywhere;
       border-left:2px solid var(--edge);padding-left:7px;
       display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:1;overflow:hidden}
-.diverge{font-size:12.5px;color:var(--accent);margin-top:3px;opacity:.85;overflow-wrap:anywhere;
+.diverge{font-size:12.5px;color:var(--dim);font-style:italic;margin-top:3px;overflow-wrap:anywhere;
       display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
 .row.sel .note,.row.sel .diverge{-webkit-line-clamp:99}
 .kids{font-size:11.5px;color:var(--faint);margin-left:6px}
-mark{background:color-mix(in srgb,var(--warn) 45%,transparent);color:inherit;border-radius:3px;padding:0 1px}
+mark{background:var(--ink);color:var(--paper);border-radius:0;padding:0 2px}
 .editing textarea{
-  width:100%;background:var(--bg);border:1px solid var(--accent);border-radius:8px;
+  width:100%;background:var(--bg);border:1px solid var(--ink);border-radius:3px;
   padding:6px 8px;outline:none;resize:none;font-size:16px;line-height:1.4;
 }
+.tools{display:flex;gap:5px;margin-top:6px;padding-top:6px;border-top:1px solid var(--line);
+       overflow-x:auto;scrollbar-width:none}
+.tools::-webkit-scrollbar{display:none}
+.tools button{flex:0 0 auto;border:1px solid var(--edge);border-radius:3px;padding:5px 9px;
+              font-size:12px;color:var(--dim);white-space:nowrap}
+.tools button:active{background:var(--ink);color:var(--paper)}
+@media (max-width:360px){ .tools button{padding:5px 7px;font-size:11.5px} }
 .swipehint{position:absolute;top:0;bottom:0;display:grid;place-items:center;font-size:18px;color:var(--accent);opacity:0;pointer-events:none}
 .empty{color:var(--dim);text-align:center;padding:46px 24px;font-size:14px;line-height:1.6}
 .empty b{color:var(--fg)}
@@ -132,7 +141,7 @@ body.mapmode main{display:none}
 #map text.dead{fill:var(--dead)}
 #map text.strong{font-weight:700}
 #map .lnk{stroke:var(--line);stroke-width:1.6;fill:none}
-#map .lnk.hy{stroke:var(--accent);stroke-dasharray:3 3;opacity:.7}
+#map .lnk.hy{stroke:var(--fg);stroke-dasharray:3 3;opacity:.55}
 #map circle{stroke-width:2}
 #map .hit{fill:transparent;stroke:none}
 
@@ -144,22 +153,22 @@ body.mapmode main{display:none}
 #target{display:flex;align-items:center;flex-wrap:wrap;gap:5px;font-size:12.5px;color:var(--dim);margin-bottom:6px;min-height:20px}
 #target .chip{
   display:inline-flex;align-items:center;gap:5px;max-width:100%;
-  background:var(--card);border:1px solid var(--edge);border-radius:20px;padding:3px 10px;
+  background:var(--card);border:1px solid var(--edge);border-radius:3px;padding:3px 10px;
   overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:var(--fg);font-size:12.5px;
 }
 #target .chip.root{color:var(--dim)}
 #target .x{color:var(--dim);font-size:14px;padding:0 2px}
 #target .mode{margin-left:auto;display:flex;gap:4px;flex:0 0 auto}
-#target .mode button{padding:3px 8px;border-radius:20px;border:1px solid var(--edge);font-size:12px;color:var(--dim);white-space:nowrap}
-#target .mode button.on{background:var(--accent2);border-color:var(--accent2);color:#fff}
+#target .mode button{padding:3px 8px;border-radius:3px;border:1px solid var(--edge);font-size:12px;color:var(--dim);white-space:nowrap}
+#target .mode button.on{background:var(--ink);border-color:var(--ink);color:var(--paper)}
 #inputrow{display:flex;gap:8px;align-items:flex-end}
 #entry{
-  flex:1;background:var(--card);border:1px solid var(--edge);border-radius:12px;
-  padding:9px 12px;outline:none;resize:none;max-height:34vh;min-height:42px;line-height:1.4;
+  flex:1;background:var(--card);border:1px solid var(--edge);
+  padding:9px 12px;outline:none;resize:none;max-height:34vh;min-height:42px;line-height:1.4;border-radius:3px;
 }
-#entry:focus{border-color:var(--accent)}
+#entry:focus{border-color:var(--ink)}
 #send{
-  flex:0 0 42px;height:42px;border-radius:50%;background:var(--accent2);color:#fff;
+  flex:0 0 42px;height:42px;border-radius:3px;background:var(--ink);color:var(--paper);
   display:grid;place-items:center;font-size:19px;transition:opacity .15s;
 }
 #send:disabled{opacity:.35}
@@ -169,10 +178,9 @@ body.mapmode main{display:none}
 #scrim.show{opacity:1}
 .sheet{
   position:fixed;left:0;right:0;bottom:0;z-index:21;background:var(--bg2);
-  border-radius:18px 18px 0 0;border-top:1px solid var(--line);
+  border-radius:0;border-top:2px solid var(--ink);
   padding:8px 12px calc(14px + var(--safeb));
   transform:translateY(102%);transition:transform .22s cubic-bezier(.2,.8,.25,1);
-  box-shadow:0 -14px 44px rgba(0,0,0,.45);
   max-height:88dvh;overflow-y:auto;
 }
 .sheet.show{transform:none}
@@ -182,43 +190,44 @@ body.mapmode main{display:none}
 .acts{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
 .acts button{
   display:flex;flex-direction:column;align-items:center;gap:5px;padding:11px 3px;
-  background:var(--card);border-radius:11px;font-size:11px;color:var(--dim);line-height:1.2;text-align:center;
+  background:var(--card);border:1px solid var(--cardline);border-radius:3px;
+  font-size:11px;color:var(--dim);line-height:1.2;text-align:center;
 }
 .acts button:active{background:var(--card2)}
 .acts button em{font-style:normal;font-size:19px;color:var(--fg)}
-.acts button.danger em,.acts button.danger{color:var(--danger)}
+.acts button.danger{font-weight:650;color:var(--fg)}
 .rowbtns{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
-.rowbtns button{background:var(--card);border:1px solid var(--edge);border-radius:9px;padding:9px 13px;font-size:13.5px}
-.rowbtns button.on{border-color:var(--accent);color:var(--accent)}
+.rowbtns button{background:var(--card);border:1px solid var(--edge);border-radius:3px;padding:9px 13px;font-size:13.5px}
+.rowbtns button.on{background:var(--ink);border-color:var(--ink);color:var(--paper)}
 .sect{margin-top:14px;font-size:12px;color:var(--faint);text-transform:uppercase;letter-spacing:.6px}
 .menu button{display:flex;align-items:center;gap:12px;width:100%;padding:13px 6px;border-bottom:1px solid var(--line);font-size:15px;text-align:left}
 .menu button:last-child{border-bottom:0}
 .menu button em{font-style:normal;width:22px;text-align:center;font-size:17px}
 .menu button small{margin-left:auto;color:var(--dim);font-size:12px}
 .sheet textarea,.sheet input[type=text]{
-  width:100%;background:var(--card);border:1px solid var(--edge);border-radius:10px;
-  padding:10px;outline:none;resize:vertical;margin-top:8px;line-height:1.4;
+  width:100%;background:var(--card);border:1px solid var(--edge);
+  padding:10px;outline:none;resize:vertical;margin-top:8px;line-height:1.4;border-radius:3px;
 }
-.sheet textarea:focus,.sheet input:focus{border-color:var(--accent)}
+.sheet textarea:focus,.sheet input:focus{border-color:var(--ink)}
 .sheet .pair{display:flex;gap:8px;margin-top:10px}
-.sheet .pair button{flex:1;padding:12px;border-radius:10px;background:var(--card);font-size:15px}
-.sheet .pair button.pri{background:var(--accent2);color:#fff;font-weight:600}
+.sheet .pair button{flex:1;padding:12px;border-radius:3px;background:var(--card);border:1px solid var(--edge);font-size:15px}
+.sheet .pair button.pri{background:var(--ink);border-color:var(--ink);color:var(--paper);font-weight:600}
 #toast{
   position:fixed;left:50%;bottom:calc(96px + var(--safeb));transform:translate(-50%,10px);
   background:var(--card2);border:1px solid var(--edge);color:var(--fg);padding:9px 14px;
-  border-radius:22px;font-size:13.5px;z-index:40;opacity:0;transition:.18s;pointer-events:none;
+  border-radius:3px;font-size:13.5px;z-index:40;opacity:0;transition:.18s;pointer-events:none;
   display:flex;align-items:center;gap:10px;max-width:92vw;
 }
 #toast.show{opacity:1;transform:translate(-50%,0)}
-#toast button{color:var(--accent);font-weight:600;font-size:13.5px;pointer-events:auto;padding:2px 4px}
+#toast button{color:var(--fg);text-decoration:underline;font-weight:600;font-size:13.5px;pointer-events:auto;padding:2px 4px}
 .help{font-size:13.5px;line-height:1.65;color:var(--dim)}
 .help b{color:var(--fg)}
-.help kbd{background:var(--card);border:1px solid var(--edge);border-radius:5px;padding:1px 5px;font-size:12px}
+.help kbd{background:var(--card);border:1px solid var(--edge);border-radius:2px;padding:1px 5px;font-size:12px}
 .help ul{margin:6px 0;padding-left:18px}
 @media (min-width:760px){
   #tree{max-width:820px;margin:0 auto;padding-left:14px}
   #composer>*{max-width:820px;margin-left:auto;margin-right:auto}
-  .sheet{max-width:640px;left:50%;transform:translate(-50%,102%);border-radius:18px 18px 0 0}
+  .sheet{max-width:640px;left:50%;transform:translate(-50%,102%)}
   .sheet.show{transform:translate(-50%,0)}
 }
 </style>
@@ -271,13 +280,13 @@ body.mapmode main{display:none}
     <button data-act="ancestor"><em>↰</em>Ancestor</button>
     <button data-act="edit"><em>✎</em>Edit</button>
     <button data-act="focus"><em>⌖</em>Focus</button>
-    <button data-act="note"><em>🗒</em>Note</button>
+    <button data-act="note"><em>≡</em>Note</button>
     <button data-act="diverge"><em>Δ</em>Change</button>
     <button data-act="move"><em>⇱</em>Move</button>
     <button data-act="hybrid"><em>⤳</em>Merge</button>
-    <button data-act="indent"><em>→</em>Indent</button>
-    <button data-act="outdent"><em>←</em>Outdent</button>
-    <button data-act="delete" class="danger"><em>🗑</em>Delete</button>
+    <button data-act="indent"><em>→</em>Nest</button>
+    <button data-act="outdent"><em>←</em>Raise</button>
+    <button data-act="delete" class="danger"><em>✕</em>Delete</button>
   </div>
   <div class="sect">Status</div>
   <div class="rowbtns" id="statusRow">
@@ -286,11 +295,12 @@ body.mapmode main{display:none}
     <button data-st="question">? Untested</button>
     <button data-st="dead">✕ Dead end</button>
   </div>
-  <div class="sect">Order</div>
+  <div class="sect">This branch</div>
   <div class="rowbtns">
     <button data-act="up">↑ Move up</button>
     <button data-act="down">↓ Move down</button>
     <button data-act="dup">⧉ Copy branch</button>
+    <button data-act="dissolve">⤒ Dissolve, raise its children</button>
     <button data-act="collapse">⌄ Collapse all below</button>
   </div>
 </div>
@@ -308,7 +318,7 @@ body.mapmode main{display:none}
     <button data-m="theme"><em>◐</em>Toggle theme</button>
     <button data-m="demo"><em>✦</em>Load example tree</button>
     <button data-m="help"><em>?</em>How it works</button>
-    <button data-m="wipe" style="color:var(--danger)"><em>🗑</em>Delete everything</button>
+    <button data-m="wipe" style="font-weight:650"><em>✕</em>Delete everything</button>
   </div>
 </div>
 
@@ -538,7 +548,6 @@ function hl(s){
     return e.replace(rx, "<mark>$1</mark>");
   }catch(_){ return e; }
 }
-const hue = d => `hsl(${(d*47 + 196) % 360} 70% 62%)`;
 function toast(msg, actionLabel, fn){
   const t = $("#toast"), b = $("#toastAct");
   $("#toastMsg").textContent = msg;
@@ -581,7 +590,6 @@ function rowsToRender(){
 }
 function rowHTML(r){
   const n = N(r.id);
-  const kc = hue(depthOf(r.id));
   let rails = "";
   for(let i=0;i<r.depth;i++){
     if(i === r.depth-1) rails += `<span class="rail elbow${r.anc[i]?" cont":""}"></span>`;
@@ -589,8 +597,8 @@ function rowHTML(r){
   }
   const hidden = n.collapsed && n.children.length;
   const knob = r.kids || n.children.length
-    ? `<i style="--kc:${kc}">${hidden ? (countAll(n.id) > 9 ? "+" : countAll(n.id)) : "−"}</i>`
-    : `<i class="leaf" style="--kc:${kc}"></i>`;
+    ? `<i>${hidden ? (countAll(n.id) > 9 ? "+" : countAll(n.id)) : "−"}</i>`
+    : `<i class="leaf"></i>`;
   const meta = [];
   if(n.status === "strong")   meta.push(`<span class="tag st-strong">★ thriving</span>`);
   if(n.status === "dead")     meta.push(`<span class="tag st-dead">✕ dead end</span>`);
@@ -605,9 +613,17 @@ function rowHTML(r){
       ${n.diverge ? `<div class="diverge">Δ ${hl(n.diverge)}</div>` : ""}
       ${n.note ? `<div class="note">${hl(n.note)}</div>` : ""}
       ${meta.length ? `<div class="meta">${meta.join("")}</div>` : ""}
+      ${sel === r.id ? TOOLS : ""}
     </div>
   </div>`;
 }
+/* Shown on the selected row only — the tree's operations are otherwise invisible. */
+const TOOLS = `<div class="tools">
+  <button data-tool="raise">← raise</button>
+  <button data-tool="nest">→ nest</button>
+  <button data-tool="move">⇱ move</button>
+  <button data-tool="more">⋯</button>
+</div>`;
 const short = (t,l) => { t = (t||"").replace(/\s+/g," ").trim(); l = l||22; return t.length>l ? t.slice(0,l-1)+"…" : t; };
 
 function render(){
@@ -658,7 +674,7 @@ function renderTarget(){
   const sibs = siblingsOf(sel).length;
   // the highlighted mode button already says *where* it lands, so the chip only names the target
   const wrapAll = mode === "ancestor" && sibs > 1;
-  const label = wrapAll ? `all ${sibs} here` : short(N(sel).text, 18);
+  const label = wrapAll ? `all ${sibs} here` : short(N(sel).text, 12);
   t.innerHTML = `<span class="chip"><b style="font-weight:600">${esc(label)}</b>
       <button class="x" data-clear="1">✕</button></span>${modeBtns}`;
   $("#entry").placeholder = mode === "child" ? "A variation of this…"
@@ -686,13 +702,14 @@ $("#tree").addEventListener("pointerdown", e => {
   const row = e.target.closest(".row");
   if(!row || $("#tree").querySelector(".editing")) return;
   g = { id:row.dataset.id, row, x:e.clientX, y:e.clientY, dx:0, dy:0, drag:false, dead:false,
+        noswipe: !!e.target.closest(".tools"),
         long:setTimeout(() => { if(g && !g.drag){ g.dead = true; buzz(14); openNodeSheet(g.id); } }, 480) };
 });
 $("#tree").addEventListener("pointermove", e => {
   if(!g) return;
   g.dx = e.clientX - g.x; g.dy = e.clientY - g.y;
   if(!g.drag && Math.abs(g.dy) > 9 && Math.abs(g.dy) > Math.abs(g.dx)){ clearTimeout(g.long); g = null; return; }
-  if(!g.drag && Math.abs(g.dx) > 12 && Math.abs(g.dx) > Math.abs(g.dy)){
+  if(!g.drag && !g.noswipe && Math.abs(g.dx) > 12 && Math.abs(g.dx) > Math.abs(g.dy)){
     g.drag = true; clearTimeout(g.long); g.row.classList.add("dragging");
   }
   if(g.drag){
@@ -721,6 +738,16 @@ function endGesture(e, cancelled){
   const t = e.target;
   const jump = t.closest("[data-jump]");
   if(jump){ const j = jump.dataset.jump; revealNode(j); sel = j; render(); scrollToNode(j, true); return; }
+  const tool = t.closest("[data-tool]");
+  if(tool){
+    const a = tool.dataset.tool;
+    if(a === "more") return openNodeSheet(id);
+    if(a === "move") return startPick("move", id);
+    pushUndo();
+    if(a === "raise" ? outdent(id) : indent(id)){ buzz(8); render(); scrollToNode(id, true); }
+    else { undoStack.pop(); toast(a === "raise" ? "Already a root lineage" : "Nothing above to branch from"); }
+    return;
+  }
   if(t.closest("[data-toggle]")){
     const n = N(id);
     if(n.children.length){ n.collapsed = !n.collapsed; render(); }
@@ -925,6 +952,12 @@ $("#sheetNode").addEventListener("click", e => {
   if(act === "up"){ pushUndo(); shift(id,-1); after(); return; }
   if(act === "down"){ pushUndo(); shift(id, 1); after(); return; }
   if(act === "collapse"){ subtreeIds(id).forEach(x => { if(x !== id && N(x).children.length) N(x).collapsed = true; }); render(); return; }
+  if(act === "dissolve"){
+    const n2 = N(id);
+    if(!n2.children.length){ toast("Nothing below to raise"); return; }
+    closeSheet(); pushUndo(); removeOnly(id); render();
+    toast("Raised " + n2.children.length + " a layer", "Undo", undo); return;
+  }
   if(act === "dup"){ pushUndo(); const nid = duplicate(id); closeSheet(); sel = nid; render(); scrollToNode(nid, true); toast("Branch copied"); return; }
   if(act === "delete"){
     const kids = countAll(id);
@@ -1051,7 +1084,8 @@ function renderMap(){
   });
   live.forEach(r => {
     const n = N(r.id), dead = n.status === "dead";
-    const c = dead ? "var(--dead)" : hue(r.d);
+    const c = dead ? "var(--dead)" : "var(--fg)";
+    if(r.id === sel) s += `<circle cx="${x(r.d)}" cy="${r.y}" r="${R + 3.5}" style="fill:none;stroke:var(--fg)"/>`;
     s += `<circle cx="${x(r.d)}" cy="${r.y}" r="${R}" style="fill:${dead ? "var(--bg)" : c};stroke:${c}"/>`;
     const lx = x(r.d) + 9;
     const mark = n.status === "strong" ? "\u2605 " : n.status === "question" ? "? " : "";
@@ -1169,7 +1203,7 @@ function setTheme(t){
   document.documentElement.dataset.theme = t;
   S.theme = t; save();
   const mc = document.querySelector('meta[name=theme-color]');
-  if(mc) mc.setAttribute("content", t === "light" ? "#ffffff" : "#0e1116");
+  if(mc) mc.setAttribute("content", t === "light" ? "#ffffff" : "#0a0a0a");
 }
 
 /* ---------- help ---------- */
@@ -1185,13 +1219,16 @@ function showHelp(){
       Siblings share a parent by definition, so a new ancestor takes in every sibling; the toast offers
       <b>Just this one</b> if you only meant to wrap the one idea.</li>
       <li><b>Tap it again</b> to edit the text in place.</li>
-      <li><b>Long-press</b> for the full action sheet.</li>
+      <li>A selected idea shows its own row of controls: <b>← raise</b> a layer, <b>→ nest</b> under the
+      idea above, <b>⇱ move to…</b> anywhere else in the tree (then tap the destination), and <b>⋯ more</b>.</li>
+      <li><b>Long-press</b> anywhere on an idea for the same full action sheet.</li>
       <li><b>Swipe right</b> on a row to make it descend from the idea above; <b>swipe left</b> to promote it up a level.</li>
       <li>Paste a whole indented outline into the bar — it grows the entire subtree at once.</li>
     </ul>
     <div class="sect">Reading it</div>
     <ul>
       <li><b>Tap the circle</b> to collapse or expand a branch. The number is how many ideas are hidden.</li>
+      <li><b>Dissolve</b> (⋯ more) deletes one idea and raises its whole clade a layer — the inverse of ↰ above.</li>
       <li><b>Focus</b> (in the action sheet) makes any idea the temporary root, so deep trees stay readable on a phone. Use the breadcrumbs to climb back out.</li>
       <li><b>◱ Map</b> shows the whole tree as a classic cladogram. Tap any tip to jump to it.</li>
     </ul>
