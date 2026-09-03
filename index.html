@@ -307,14 +307,16 @@ body.mapmode main{display:none}
 
 <div class="sheet" id="sheetMenu">
   <div class="grab"></div>
+  <div class="sect" id="statLine" style="margin-top:0"></div>
   <div class="menu">
     <button data-m="expand"><em>⌄</em>Expand all</button>
     <button data-m="collapse"><em>›</em>Collapse all</button>
     <button data-m="unfocus"><em>⌂</em>Back to whole forest</button>
     <button data-m="paste"><em>⤓</em>Import outline (paste text)</button>
     <button data-m="exportmd"><em>↗</em>Export as Markdown</button>
-    <button data-m="exportjson"><em>{}</em>Export as JSON <small id="statLine"></small></button>
+    <button data-m="exportjson"><em>{}</em>Export as JSON</button>
     <button data-m="importjson"><em>⤒</em>Import JSON file</button>
+    <button data-m="restore"><em>↺</em>Restore a saved point <small id="snapLine"></small></button>
     <button data-m="theme"><em>◐</em>Toggle theme</button>
     <button data-m="demo"><em>✦</em>Load example tree</button>
     <button data-m="help"><em>?</em>How it works</button>
@@ -360,34 +362,168 @@ let undoStack = [], redoStack = [];
 const uid = () => Math.random().toString(36).slice(2,9) + Date.now().toString(36).slice(-3);
 const N   = id => S.nodes[id];
 
-/* ---------- persistence ---------- */
-let saveTimer = null;
-function save(){
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    try { localStorage.setItem(KEY, JSON.stringify(S)); }
-    catch(e){ toast("Could not save — storage full?"); }
-  }, 180);
+/* ---------- persistence -------------------------------------------------
+   The storage key never changes between versions. The schema version lives
+   inside the payload, and everything read back is rebuilt into a valid
+   forest before use, so a tree written by any older or newer build still
+   opens. Nothing is ever seeded or written over data we failed to read.
+   ------------------------------------------------------------------------ */
+const SNAPS = "ideaphylo.snapshots.v1";
+const SCHEMA = 2;
+const SNAP_EVERY = 6 * 3600e3;   // keep at most one restore point per 6h of use
+const SNAP_KEEP  = 3;
+const STATUSES = ["", "strong", "dead", "question"];
+
+let blocked = false;             // true when stored data could not be read: never write
+let lastSaved = 0, saveTimer = null;
+
+const lsGet = k => { try { return localStorage.getItem(k); } catch(_){ return null; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, v); return true; } catch(_){ return false; } };
+
+function serialise(){
+  const sc = document.getElementById("scroller");
+  return JSON.stringify({
+    v: SCHEMA, savedAt: Date.now(),
+    nodes: S.nodes, roots: S.roots, focus: S.focus, theme: S.theme,
+    view: { sel, top: sc ? Math.round(sc.scrollTop) : 0 }
+  });
 }
-function load(){
-  try{
-    const raw = localStorage.getItem(KEY);
-    if(!raw) return false;
-    const d = JSON.parse(raw);
-    if(!d || !d.nodes) return false;
-    S = Object.assign({ nodes:{}, roots:[], focus:null, theme:null }, d);
-    // integrity pass: drop orphans, rebuild missing links
-    for(const id in S.nodes){
-      const n = S.nodes[id];
-      n.children = (n.children||[]).filter(c => S.nodes[c]);
-      n.hybrids  = (n.hybrids||[]).filter(c => S.nodes[c] && c !== id);
-      if(n.parent && !S.nodes[n.parent]) n.parent = null;
+function writeNow(){
+  if(blocked) return false;
+  clearTimeout(saveTimer);
+  if(lsSet(KEY, serialise())){ lastSaved = Date.now(); return true; }
+  toast("Could not save — browser storage is full");
+  return false;
+}
+function save(){ if(blocked) return; clearTimeout(saveTimer); saveTimer = setTimeout(writeNow, 180); }
+
+/* Rebuild a valid forest out of whatever was stored. Children arrays are the
+   structural truth; parents are derived from them, duplicate claims and cycles
+   are cut, unknown fields are defaulted. This is what lets a tree survive a
+   change to the code that wrote it. */
+function normalise(d){
+  const src = (d && typeof d.nodes === "object" && d.nodes) || {};
+  const out = {};
+  for(const id in src){
+    const n = src[id] || {};
+    out[id] = {
+      id,
+      text:     typeof n.text === "string" ? n.text : (n.text == null ? "" : String(n.text)),
+      note:     typeof n.note === "string" ? n.note : "",
+      diverge:  typeof n.diverge === "string" ? n.diverge : "",
+      status:   STATUSES.includes(n.status) ? n.status : "",
+      parent:   null,
+      children: Array.isArray(n.children) ? n.children.slice() : [],
+      collapsed: !!n.collapsed,
+      hybrids:  Array.isArray(n.hybrids) ? n.hybrids.slice() : [],
+      created:  typeof n.created === "number" ? n.created : Date.now()
+    };
+  }
+  for(const id in out){                       // one parent per node, first claim wins
+    const seen = new Set();
+    out[id].children = out[id].children.filter(c => {
+      if(!out[c] || c === id || seen.has(c) || out[c].parent != null) return false;
+      seen.add(c); out[c].parent = id; return true;
+    });
+  }
+  for(const id in out){                       // cut any cycle a bad write left behind
+    const path = new Set();
+    let c = id;
+    while(c){
+      if(path.has(c)){
+        const p = out[c].parent;
+        if(p) out[p].children = out[p].children.filter(x => x !== c);
+        out[c].parent = null;
+        break;
+      }
+      path.add(c); c = out[c].parent;
     }
-    S.roots = (S.roots||[]).filter(r => S.nodes[r]);
-    for(const id in S.nodes) if(!S.nodes[id].parent && !S.roots.includes(id)) S.roots.push(id);
-    if(S.focus && !S.nodes[S.focus]) S.focus = null;
-    return true;
-  }catch(e){ return false; }
+  }
+  for(const id in out){
+    const seen = new Set();
+    out[id].hybrids = out[id].hybrids.filter(h =>
+      out[h] && h !== id && !seen.has(h) && (seen.add(h), true));
+  }
+  const roots = [];
+  (Array.isArray(d.roots) ? d.roots : []).forEach(r => {
+    if(out[r] && out[r].parent == null && !roots.includes(r)) roots.push(r);
+  });
+  for(const id in out) if(out[id].parent == null && !roots.includes(id)) roots.push(id);
+  return {
+    nodes: out, roots,
+    focus: out[d.focus] ? d.focus : null,
+    theme: d.theme === "light" || d.theme === "dark" ? d.theme : null,
+    view:  d.view && typeof d.view === "object" ? d.view : null
+  };
+}
+const looksLikeStore = d => !!d && typeof d === "object" && !!d.nodes
+                            && typeof d.nodes === "object" && !Array.isArray(d.nodes);
+
+/* ---------- restore points ---------- */
+function readSnaps(){
+  try { const a = JSON.parse(lsGet(SNAPS)); return Array.isArray(a) ? a : []; } catch(_){ return []; }
+}
+function keepSnapshot(raw, count){
+  const arr = readSnaps();
+  if(arr[0] && Date.now() - arr[0].at < SNAP_EVERY) return;
+  arr.unshift({ at: Date.now(), n: count, data: raw });
+  while(arr.length > SNAP_KEEP) arr.pop();
+  while(arr.length && !lsSet(SNAPS, JSON.stringify(arr))) arr.pop();   // shed oldest on quota
+}
+function ago(ts){
+  const s = Math.max(0, Date.now() - ts) / 1000;
+  if(s < 45) return "just now";
+  if(s < 5400) return Math.round(s / 60) + " min ago";
+  if(s < 172800) return Math.round(s / 3600) + " h ago";
+  return Math.round(s / 86400) + " days ago";
+}
+function restoreSheet(){
+  const snaps = readSnaps();
+  if(!snaps.length) return toast("No restore points saved yet");
+  askChoice("Restore a saved point", snaps.map(sn => ({
+    label: `${ago(sn.at)} — ${sn.n} ${sn.n === 1 ? "idea" : "ideas"}`,
+    fn(){
+      let d = null;
+      try { d = JSON.parse(sn.data); } catch(_){}
+      if(!looksLikeStore(d)) return toast("That restore point is unreadable");
+      pushUndo();
+      const theme = S.theme;
+      S = normalise(d); S.theme = theme;
+      sel = null; blocked = false;
+      render();
+      toast(`Restored ${totalNodes()} ideas`, "Undo", undo);
+    }
+  })));
+}
+
+/* ---------- opening the store ---------- */
+function openStore(){
+  const raw = lsGet(KEY);
+  if(raw == null) return "fresh";
+  let d = null;
+  try { d = JSON.parse(raw); } catch(_){}
+  if(!looksLikeStore(d)){ blocked = true; return "unreadable"; }   // stop every write, now
+  S = normalise(d);
+  lastSaved = typeof d.savedAt === "number" ? d.savedAt : Date.now();
+  keepSnapshot(raw, Object.keys(S.nodes).length);
+  return "loaded";
+}
+/* Data we could not parse is never overwritten — it is handed back to the user. */
+function offerRecovery(){
+  blocked = true;
+  const snaps = readSnaps();
+  const opts = [];
+  if(snaps.length) opts.push({ label: `Restore the last saved point (${ago(snaps[0].at)}, ${snaps[0].n} ideas)`,
+    fn(){ blocked = false; restoreSheet(); } });
+  opts.push({ label: "Download the unreadable data", fn(){
+    download("ideaphylo-unreadable.json", lsGet(KEY) || "", "application/json");
+    setTimeout(offerRecovery, 700);
+  }});
+  opts.push({ label: "Start a new tree (discards it)", danger:true, fn(){
+    blocked = false; S = { nodes:{}, roots:[], focus:null, theme:S.theme }; sel = null;
+    writeNow(); render();
+  }});
+  askChoice("Your saved tree could not be read", opts);
 }
 
 /* ---------- undo ---------- */
@@ -639,7 +775,6 @@ function render(){
   }
   renderCrumbs();
   renderTarget();
-  $("#statLine").textContent = totalNodes() + " nodes";
   if(document.body.classList.contains("mapmode")) renderMap();
   save();
 }
@@ -762,7 +897,11 @@ $("#tree").addEventListener("pointercancel", () => endGesture(null, true));
 /* the row can be re-rendered mid-press, detaching the event target — catch the tail here */
 window.addEventListener("pointerup", () => { if(g){ clearTimeout(g.long); g = null; } });
 window.addEventListener("pointercancel", () => endGesture(null, true));
-scroller.addEventListener("scroll", () => { if(g && !g.drag){ clearTimeout(g.long); g = null; } }, {passive:true});
+let scrollSave = null;
+scroller.addEventListener("scroll", () => {
+  if(g && !g.drag){ clearTimeout(g.long); g = null; }
+  clearTimeout(scrollSave); scrollSave = setTimeout(writeNow, 1200);   // reopen where you left off
+}, {passive:true});
 
 /* ---------- inline edit ---------- */
 function startEdit(id){
@@ -1155,22 +1294,27 @@ $("#fileIn").addEventListener("change", e => {
   r.onload = () => {
     try{
       const d = JSON.parse(r.result);
-      if(!d.nodes || !d.roots) throw 0;
+      if(!looksLikeStore(d)) throw 0;
       pushUndo();
-      S.nodes = d.nodes; S.roots = d.roots; S.focus = null; sel = null;
-      for(const id in S.nodes){
-        const n = S.nodes[id];
-        n.children = n.children || []; n.hybrids = n.hybrids || [];
-        n.note = n.note || ""; n.diverge = n.diverge || ""; n.status = n.status || "";
-      }
-      render(); toast("Imported " + totalNodes() + " ideas");
+      const theme = S.theme;
+      S = normalise(d); S.theme = theme; S.focus = null; sel = null; blocked = false;
+      render(); toast("Imported " + totalNodes() + " ideas", "Undo", undo);
     }catch(_){ toast("That file isn’t an Ideaphylo export"); }
   };
   r.readAsText(f); e.target.value = "";
 });
 
 /* ---------- menu ---------- */
-$("#btnMenu").addEventListener("click", () => showSheet("#sheetMenu"));
+function updateStat(){
+  const bytes = (lsGet(KEY) || "").length;
+  $("#statLine").textContent = blocked
+    ? "STORED TREE UNREADABLE — NOTHING IS BEING SAVED"
+    : `${totalNodes()} ideas · ${lastSaved ? "saved " + ago(lastSaved) : "not saved yet"}`
+      + (bytes ? ` · ${(bytes/1024).toFixed(1)} KB` : "");
+  const snaps = readSnaps();
+  $("#snapLine").textContent = snaps.length ? snaps.length + " kept" : "none yet";
+}
+$("#btnMenu").addEventListener("click", () => { updateStat(); showSheet("#sheetMenu"); });
 $("#sheetMenu").addEventListener("click", e => {
   const b = e.target.closest("[data-m]"); if(!b) return;
   const m = b.dataset.m;
@@ -1181,6 +1325,7 @@ $("#sheetMenu").addEventListener("click", e => {
   if(m === "exportmd") copyOrDownload("ideaphylo.md", toMarkdown(), "text/markdown");
   if(m === "exportjson") copyOrDownload("ideaphylo.json", JSON.stringify({nodes:S.nodes, roots:S.roots}, null, 1), "application/json");
   if(m === "importjson") $("#fileIn").click();
+  if(m === "restore") restoreSheet();
   if(m === "theme"){ setTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light"); }
   if(m === "demo"){ closeSheet(); askChoice("Load the example tree?", [
       { label:"Add it alongside my ideas", fn(){ pushUndo(); seed(false); render(); } },
@@ -1240,7 +1385,11 @@ function showHelp(){
     </ul>
     <div class="sect">Keeping it</div>
     <ul>
-      <li>Everything saves to this browser automatically. Nothing leaves the device.</li>
+      <li>Everything saves to this browser automatically, and reopens exactly where you left it —
+      same selection, same scroll. Nothing leaves the device.</li>
+      <li>The tree survives new versions of this file: the store is repaired and migrated on open,
+      never replaced. If it ever can't be read it is left untouched and you are offered the
+      <b>restore points</b> (☰ menu) instead — up to three, one per six hours of use.</li>
       <li>Export to JSON (to reload later) or Markdown (to paste anywhere) from the ☰ menu.</li>
       <li>On iOS, <i>Share → Add to Home Screen</i> makes it open like an app.</li>
     </ul>
@@ -1297,6 +1446,12 @@ function seed(replace){
   sel = null;
 }
 
+/* ---------- another tab editing the same tree ---------- */
+window.addEventListener("storage", e => {
+  if(e.key !== KEY || blocked || !e.newValue) return;
+  toast("Edited in another tab", "Load it", () => location.reload());
+});
+
 /* ---------- mobile viewport / keyboard ---------- */
 function fitViewport(){
   const vv = window.visualViewport;
@@ -1312,13 +1467,30 @@ document.addEventListener("gesturestart", e => e.preventDefault());
 /* ---------- boot ---------- */
 (function init(){
   fitViewport();
-  const had = load();
-  if(!had) seed(true);
+  const state = openStore();
+  /* A "fresh" boot that nonetheless has restore points means the main store was
+     lost while its backups survived — offer them rather than seeding over it. */
+  const orphaned = state === "fresh" && readSnaps().length > 0;
+  if(state === "fresh" && !orphaned) seed(true);
   setTheme(S.theme || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"));
+  const view = S.view;
   render();
-  if(!had) setTimeout(showHelp, 500);
+  if(state === "unreadable"){
+    $("#tree").innerHTML = `<div class="empty"><b>Your saved tree could not be read.</b><br>
+      It has been left untouched — nothing will be written over it until you choose.</div>`;
+    setTimeout(offerRecovery, 300);
+  } else if(view){                      // reopen exactly where it was left
+    if(view.sel && N(view.sel)){ sel = view.sel; render(); }
+    if(view.top) requestAnimationFrame(() => { scroller.scrollTop = view.top; });
+  }
+  if(orphaned) setTimeout(() => askChoice("A saved tree from an earlier version was found", [
+    { label:`Restore it (${readSnaps()[0].n} ideas, ${ago(readSnaps()[0].at)})`, fn: restoreSheet },
+    { label:"Start a new tree instead", fn(){ seed(true); render(); } }
+  ]), 400);
+  else if(state === "fresh") setTimeout(showHelp, 500);
   autosize();
-  window.addEventListener("beforeunload", () => { try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(_){} });
+  window.addEventListener("beforeunload", writeNow);
+  document.addEventListener("visibilitychange", () => { if(document.hidden) writeNow(); });
 })();
 </script>
 </body>

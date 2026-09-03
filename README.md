@@ -64,7 +64,27 @@ Both themes are verified to contain no non-grey pixel.
 
 ## Keeping your work
 
-Saved to `localStorage` automatically; nothing leaves the device.
+Saved to `localStorage` automatically; nothing leaves the device. Reopening restores the
+tree, the selected idea and the scroll position, so it picks up mid-thought.
+
+**Your tree is meant to outlive the code.** The storage key never changes between
+versions, the schema version travels inside the payload, and every load is rebuilt into a
+valid forest before use — children are the structural truth, parents are re-derived,
+duplicate claims and cycles are cut, unknown fields are defaulted, fields from a newer
+build are ignored rather than fatal. A tree written by any past or future build opens.
+
+If the stored data still can't be read, it is **never** overwritten: writes stop, the
+bytes are left exactly as they are, and you are offered a restore point, a download of the
+unreadable data, or a deliberate fresh start. Up to three **restore points** are kept —
+one per six hours of use — under ☰ → *Restore a saved point*. The ☰ menu also shows what
+is stored and when it was last saved.
+
+Editing in two tabs is detected rather than silently clobbered.
+
+One caveat worth knowing: `localStorage` is scoped to the origin the page is served from.
+Opening the same file from a different origin — a web host instead of `file://`, or another
+device — starts an empty tree. Carry it across with **Export as JSON** → **Import JSON
+file**; that path is lossless.
 
 - **JSON** export/import — lossless, the format to trust for backups.
 - **Markdown** export — a plain indented outline that also round-trips back in through
