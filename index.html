@@ -249,6 +249,7 @@ body.mapmode main{display:none}
     <span id="searchcount"></span>
   </div>
   <button class="hbtn" id="btnSearch" title="Search" aria-label="Search">⌕</button>
+  <button class="hbtn" id="btnDraw" title="Draw a random tip" aria-label="Draw a random tip">⚄</button>
   <button class="hbtn" id="btnMap" title="Map view" aria-label="Map view">◱</button>
   <button class="hbtn" id="btnMenu" title="Menu" aria-label="Menu">☰</button>
 </header>
@@ -322,6 +323,8 @@ body.mapmode main{display:none}
     <button data-m="expand"><em>⌄</em>Expand all</button>
     <button data-m="collapse"><em>›</em>Collapse all</button>
     <button data-m="unfocus"><em>⌂</em>Back to whole forest</button>
+    <button data-m="draw"><em>⚄</em>Draw a random tip</button>
+    <button data-m="spread"><em>⇹</em>Spread draws across the tree <small id="spreadLine"></small></button>
     <button data-m="paste"><em>⤓</em>Import outline (paste text)</button>
     <button data-m="exportmd"><em>↗</em>Export as Markdown</button>
     <button data-m="exportjson"><em>{}</em>Export as JSON</button>
@@ -361,7 +364,7 @@ const KEY = "ideaphylo.v1";
 const $  = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
 
-let S = { nodes:{}, roots:[], focus:null, theme:null };
+let S = { nodes:{}, roots:[], focus:null, theme:null, spread:true };
 let sel = null;              // selected node id
 let mode = "child";          // "child" | "sibling" | "ancestor"
 let query = "";
@@ -394,7 +397,7 @@ function serialise(){
   const sc = document.getElementById("scroller");
   return JSON.stringify({
     v: SCHEMA, savedAt: Date.now(),
-    nodes: S.nodes, roots: S.roots, focus: S.focus, theme: S.theme,
+    nodes: S.nodes, roots: S.roots, focus: S.focus, theme: S.theme, spread: S.spread !== false,
     view: { sel, top: sc ? Math.round(sc.scrollTop) : 0 }
   });
 }
@@ -463,6 +466,7 @@ function normalise(d){
     nodes: out, roots,
     focus: out[d.focus] ? d.focus : null,
     theme: d.theme === "light" || d.theme === "dark" ? d.theme : null,
+    spread: d.spread !== false,
     view:  d.view && typeof d.view === "object" ? d.view : null
   };
 }
@@ -497,8 +501,8 @@ function restoreSheet(){
       try { d = JSON.parse(sn.data); } catch(_){}
       if(!looksLikeStore(d)) return toast("That restore point is unreadable");
       pushUndo();
-      const theme = S.theme;
-      S = normalise(d); S.theme = theme;
+      const theme = S.theme, spread = S.spread;
+      S = normalise(d); S.theme = theme; S.spread = spread;
       sel = null; blocked = false;
       render();
       toast(`Restored ${totalNodes()} ideas`, "Undo", undo);
@@ -530,7 +534,7 @@ function offerRecovery(){
     setTimeout(offerRecovery, 700);
   }});
   opts.push({ label: "Start a new tree (discards it)", danger:true, fn(){
-    blocked = false; S = { nodes:{}, roots:[], focus:null, theme:S.theme }; sel = null;
+    blocked = false; S = { nodes:{}, roots:[], focus:null, theme:S.theme, spread:S.spread }; sel = null;
     writeNow(); render();
   }});
   askChoice("Your saved tree could not be read", opts);
@@ -634,6 +638,19 @@ function shift(id, dir){
   const arr = siblingsOf(id), i = arr.indexOf(id), j = i + dir;
   if(i < 0 || j < 0 || j >= arr.length) return false;
   arr.splice(i,1); arr.splice(j,0,id); return true;
+}
+/* Move a clade earlier or later among its siblings — the whole thing travels,
+   descendants included. The one rearrangement that changes nothing structural:
+   only the order you read them in. */
+function reorder(id, dir){
+  pushUndo();
+  if(!shift(id, dir)){
+    undoStack.pop();
+    toast(dir < 0 ? "Already first among its siblings" : "Already last among its siblings");
+    return false;
+  }
+  buzz(8); render(); scrollToNode(id, true);
+  return true;
 }
 function subtreeIds(id, out){
   out = out || []; out.push(id);
@@ -757,6 +774,67 @@ function computeSearch(){
   $("#searchcount").textContent = matches.size ? matches.size + " hit" + (matches.size>1?"s":"") : "none";
 }
 
+/* ---------- drawing tips at random --------------------------------------
+   A tip is an idea nothing has descended from yet — the live edge of a
+   lineage. Drawing them one at a time is a way to re-read your own tree from
+   its edges, and to land somewhere you were not already looking.
+
+   With `spread` on, successive draws are pushed as far apart as the tree
+   allows: the next tip is the one whose nearest already-drawn relative
+   branches off as early as possible. Draw a plant and the next draw is a
+   bacterium rather than another plant. Every tip is drawn once before any
+   repeats; the deck then reshuffles.
+   ------------------------------------------------------------------------ */
+let drawn = [];          // tips drawn since the deck was last exhausted, in order
+function tipsHere(){     // leaves of whatever is on screen — focus included
+  const out = [];
+  const walk = id => { const n = N(id); if(!n) return; n.children.length ? n.children.forEach(walk) : out.push(id); };
+  (S.focus && N(S.focus) ? [S.focus] : S.roots).forEach(walk);
+  return out;
+}
+/* Depth of the last ancestor two tips share: 0 = they split at a root,
+   -1 = they belong to separate root lineages and share nothing at all. */
+function splitDepth(a, b){
+  const pa = pathTo(a), pb = pathTo(b);
+  let i = 0;
+  while(i < pa.length && i < pb.length && pa[i] === pb[i]) i++;
+  return i - 1;
+}
+function drawTip(){
+  if(document.body.classList.contains("mapmode")) $("#btnMap").click();
+  const tips = tipsHere();
+  if(!tips.length) return toast(totalNodes() ? "Every idea here already has descendants" : "No ideas yet");
+  const live = new Set(tips);
+  drawn = drawn.filter(id => live.has(id));
+  const taken = new Set(drawn);
+  let pool = tips.filter(t => !taken.has(t)), cycled = false;
+  if(!pool.length){ drawn = []; pool = tips.slice(); cycled = tips.length > 1; }
+  let picked, split = null;
+  if(S.spread && drawn.length){
+    let best = Infinity, bucket = [];
+    pool.forEach(t => {
+      let d = -1;
+      for(const x of drawn){ const v = splitDepth(t, x); if(v > d) d = v; }
+      if(d < best){ best = d; bucket = [t]; }
+      else if(d === best) bucket.push(t);
+    });
+    picked = bucket[Math.floor(Math.random() * bucket.length)];
+    split = best;
+  } else {
+    picked = pool[Math.floor(Math.random() * pool.length)];
+  }
+  drawn.push(picked);
+  revealNode(picked); sel = picked; render(); scrollToNode(picked, true); buzz(8);
+  let msg = (cycled ? "All seen — starting over · " : "") + drawn.length + " of " + tips.length;
+  if(split !== null){
+    const anc = split >= 0 ? pathTo(picked)[split] : null;
+    msg += !anc ? " · a separate lineage"
+         : " · splits at " + (N(anc).text ? "\u201c" + short(N(anc).text, 16) + "\u201d" : "an unnamed idea");
+  }
+  toast(msg, "Again", drawTip);
+}
+$("#btnDraw").addEventListener("click", drawTip);
+
 /* ---------- render ---------- */
 function rowsToRender(){
   const rows = [];
@@ -805,6 +883,8 @@ function rowHTML(r){
 const TOOLS = `<div class="tools">
   <button data-tool="raise">← raise</button>
   <button data-tool="nest">→ nest</button>
+  <button data-tool="up" title="Move up among its siblings">↑</button>
+  <button data-tool="down" title="Move down among its siblings">↓</button>
   <button data-tool="move">⇱ move</button>
   <button data-tool="more">⋯</button>
 </div>`;
@@ -926,6 +1006,7 @@ function endGesture(e, cancelled){
     const a = tool.dataset.tool;
     if(a === "more") return openNodeSheet(id);
     if(a === "move") return startPick("move", id);
+    if(a === "up" || a === "down") return reorder(id, a === "up" ? -1 : 1);
     pushUndo();
     if(a === "raise" ? outdent(id) : indent(id)){ buzz(8); render(); scrollToNode(id, true); }
     else { undoStack.pop(); toast(a === "raise" ? "Already a root lineage" : "Nothing above to branch from"); }
@@ -1136,8 +1217,8 @@ $("#sheetNode").addEventListener("click", e => {
   if(act === "hybrid"){ closeSheet(); startPick("hybrid", id); return; }
   if(act === "indent"){ pushUndo(); if(!indent(id)) { undoStack.pop(); toast("Nothing above to branch from"); } after(); return; }
   if(act === "outdent"){ pushUndo(); if(!outdent(id)) { undoStack.pop(); toast("Already a root lineage"); } after(); return; }
-  if(act === "up"){ pushUndo(); shift(id,-1); after(); return; }
-  if(act === "down"){ pushUndo(); shift(id, 1); after(); return; }
+  if(act === "up"){ reorder(id, -1); return; }
+  if(act === "down"){ reorder(id, 1); return; }
   if(act === "collapse"){ subtreeIds(id).forEach(x => { if(x !== id && N(x).children.length) N(x).collapsed = true; }); render(); return; }
   if(act === "dissolve"){
     const n2 = N(id);
@@ -1412,8 +1493,8 @@ $("#fileIn").addEventListener("change", e => {
       const d = JSON.parse(r.result);
       if(!looksLikeStore(d)) throw 0;
       pushUndo();
-      const theme = S.theme;
-      S = normalise(d); S.theme = theme; S.focus = null; sel = null; blocked = false;
+      const theme = S.theme, spread = S.spread;
+      S = normalise(d); S.theme = theme; S.spread = spread; S.focus = null; sel = null; blocked = false;
       render(); toast("Imported " + totalNodes() + " ideas", "Undo", undo);
     }catch(_){ toast("That file isn’t an Ideaphylo export"); }
   };
@@ -1429,15 +1510,22 @@ function updateStat(){
       + (bytes ? ` · ${(bytes/1024).toFixed(1)} KB` : "");
   const snaps = readSnaps();
   $("#snapLine").textContent = snaps.length ? snaps.length + " kept" : "none yet";
+  $("#spreadLine").textContent = S.spread !== false ? "on" : "off";
 }
 $("#btnMenu").addEventListener("click", () => { updateStat(); showSheet("#sheetMenu"); });
 $("#sheetMenu").addEventListener("click", e => {
   const b = e.target.closest("[data-m]"); if(!b) return;
   const m = b.dataset.m;
-  if(m !== "help" && m !== "paste") closeSheet();
+  if(m !== "help" && m !== "paste" && m !== "spread") closeSheet();
   if(m === "expand"){ for(const k in S.nodes) S.nodes[k].collapsed = false; render(); }
   if(m === "collapse"){ for(const k in S.nodes) if(S.nodes[k].parent) S.nodes[k].collapsed = true; render(); }
   if(m === "unfocus"){ S.focus = null; render(); scroller.scrollTop = 0; }
+  if(m === "draw"){ drawTip(); }
+  if(m === "spread"){
+    S.spread = S.spread === false; save(); updateStat();
+    toast(S.spread ? "Each draw lands as far from the last ones as the tree allows"
+                   : "Draws are now plain chance, anywhere in the tree");
+  }
   if(m === "exportmd") copyOrDownload("ideaphylo.md", toMarkdown(), "text/markdown");
   if(m === "exportjson") copyOrDownload("ideaphylo.json", JSON.stringify({nodes:S.nodes, roots:S.roots}, null, 1), "application/json");
   if(m === "importjson") $("#fileIn").click();
@@ -1484,6 +1572,8 @@ function showHelp(){
       idea above, <b>⇱ move to…</b> anywhere else in the tree (then tap the destination), and <b>⋯ more</b>.</li>
       <li><b>Long-press</b> anywhere on an idea for the same full action sheet.</li>
       <li><b>Swipe right</b> on a row to make it descend from the idea above; <b>swipe left</b> to promote it up a level.</li>
+      <li><b>↑</b> and <b>↓</b> in that row of controls shift an idea earlier or later among its
+      siblings, carrying everything below it. Order is yours to set — the tree never re-sorts itself.</li>
       <li>Paste a whole indented outline into the bar — it grows the entire subtree at once.</li>
     </ul>
     <div class="sect">Reading it</div>
@@ -1499,6 +1589,11 @@ function showHelp(){
       give <i>Colour</i> to each animal, then to each plant.</li>
       <li><b>Focus</b> (in the action sheet) makes any idea the temporary root, so deep trees stay readable on a phone. Use the breadcrumbs to climb back out.</li>
       <li><b>◱ Map</b> shows the whole tree as a classic cladogram. Tap any tip to jump to it.</li>
+      <li><b>⚄ Draw</b> jumps to a random <i>tip</i> — an idea nothing has descended from yet, the live
+      edge of a lineage. Tap it again and again to be walked round your own tree from its edges.
+      With <b>Spread draws across the tree</b> on (☰ menu) each draw lands as far from the ones already
+      drawn as the tree allows: draw a plant and the next draw is a bacterium, not another plant.
+      Every tip comes up once before any repeats.</li>
     </ul>
     <div class="sect">Marking what happened</div>
     <ul>
@@ -1519,7 +1614,8 @@ function showHelp(){
     <div class="sect">On a keyboard</div>
     <ul>
       <li><kbd>↑</kbd><kbd>↓</kbd> move the selection, <kbd>←</kbd><kbd>→</kbd> collapse and expand, <kbd>Enter</kbd> edits,
-      <kbd>Tab</kbd>/<kbd>⇧Tab</kbd> re-parent, <kbd>⌘Z</kbd> undoes.</li>
+      <kbd>Tab</kbd>/<kbd>⇧Tab</kbd> re-parent, <kbd>⌥↑</kbd>/<kbd>⌥↓</kbd> reorder among siblings,
+      <kbd>R</kbd> draws a random tip, <kbd>⌘Z</kbd> undoes.</li>
     </ul>`;
   $("#helpClose").textContent = "Got it";
   $("#helpClose").onclick = closeSheet;
@@ -1533,6 +1629,10 @@ document.addEventListener("keydown", e => {
   if(mod && e.key.toLowerCase() === "z"){ e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
   if(e.key === "Escape"){ if(pick) endPick(); else if(openSheet) closeSheet(); else if(query){ $("#q").value=""; query=""; render(); } return; }
   if(inField) return;
+  if(e.altKey && sel && (e.key === "ArrowUp" || e.key === "ArrowDown")){
+    e.preventDefault(); reorder(sel, e.key === "ArrowUp" ? -1 : 1); return;
+  }
+  if(e.key === "r" && !mod){ e.preventDefault(); drawTip(); return; }
   const rows = rowsToRender(), i = rows.findIndex(r => r.id === sel);
   if(e.key === "ArrowDown"){ e.preventDefault();
     const next = rows[i < 0 ? 0 : Math.min(rows.length-1, i+1)];

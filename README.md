@@ -24,11 +24,12 @@ like an app, full screen and offline.
 | **Tap** an idea | select it — what you type below becomes its descendant |
 | **Tap again** | edit the text in place |
 | **Long-press** | full action sheet |
-| **Selected row's controls** | `← raise` a layer · `→ nest` under the idea above · `⇱ move` anywhere in the tree · `⋯` for everything else |
+| **Selected row's controls** | `← raise` a layer · `→ nest` under the idea above · `↑`/`↓` reorder among siblings · `⇱ move` anywhere in the tree · `⋯` for everything else |
 | **Swipe right / left** | re-parent: descend from the idea above / promote a level |
 | **Tap the circle** | collapse or expand a branch (the number is what's hidden) |
 | **Focus** | make any idea the temporary root — how deep trees stay readable on a small screen |
 | **◱** | whole-tree overview; tap any node to jump to it |
+| **⚄** | jump to a random tip — see *Drawing tips* below |
 
 The compose bar always shows what a new idea will attach to, and grows in three directions:
 
@@ -43,6 +44,22 @@ The compose bar always shows what a new idea will attach to, and grows in three 
 
 Paste a whole indented outline into the bar (spaces or tabs) and it grows the entire
 subtree at once.
+
+## Drawing tips
+
+**⚄** in the header jumps to a random **tip** — an idea nothing has descended from yet,
+the live edge of a lineage. Tap it again and again and it walks you round your own tree
+from its edges, which is a different way of reading it than scrolling from the top.
+
+☰ → **Spread draws across the tree** (on by default) changes what *random* means. Each
+draw is pushed as far from the ones already drawn as the tree allows: the next tip is the
+one whose nearest already-drawn relative branches off earliest. Draw a plant and the next
+draw is a bacterium, not another kind of plant — the early splits get sampled before the
+late ones. Turn it off for plain chance.
+
+Every tip comes up once before any repeats; when they are all seen the deck reshuffles.
+The toast says how far through you are and where the draw split from what came before.
+Drawing respects **Focus** — focus a clade and the draws stay inside it.
 
 ## What a node carries
 
@@ -118,6 +135,9 @@ to know about:
   to each plant, and each copy evolves on its own from there. Anything already inside the
   clade being copied is skipped rather than fed back into itself, and a graft that would
   plant more than 30 ideas asks first, with the count.
+- **↑ / ↓** — shift an idea earlier or later among its siblings, whole clade included.
+  Sibling order is yours to set; nothing ever re-sorts itself. Also `⌥↑`/`⌥↓` on a keyboard,
+  and in ⋯ → *Move up* / *Move down*.
 - **⋯ → Dissolve** — deletes one idea and raises its children into its place. The inverse
   of **↰ above**, for when an intermediate idea turns out to be doing no work.
 
@@ -128,4 +148,5 @@ Swiping a row right or left does *nest* and *raise* too, once you know it's ther
 ## On a keyboard
 
 `↑`/`↓` move the selection · `←`/`→` collapse and expand · `Enter` edits ·
-`Tab` / `⇧Tab` re-parent · `⌘Z` / `⇧⌘Z` undo and redo · `Esc` backs out.
+`Tab` / `⇧Tab` re-parent · `⌥↑` / `⌥↓` reorder among siblings · `R` draws a random tip ·
+`⌘Z` / `⇧⌘Z` undo and redo · `Esc` backs out.
