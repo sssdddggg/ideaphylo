@@ -101,6 +101,12 @@ to know about:
 - **→ nest** — it descends from the idea above instead.
 - **⇱ move** — then tap any destination: the clade moves there whole. Tap *Make root* to
   cut it loose as its own lineage.
+- **⎘ copy** — the same flow, switched at the top bar (or ⋯ → *Copy into…*). The
+  destination clade **inherits a copy** of the whole clade; the original stays put. The
+  graft is tagged **⤳** with where it was inherited from, and evolves independently
+  afterwards — edit one and the other is untouched. Tap *Unlink source* on the toast if
+  you would rather not record the provenance, or *As new lineage* to graft it as its own
+  root instead.
 - **⋯ → Dissolve** — deletes one idea and raises its children into its place. The inverse
   of **↰ above**, for when an intermediate idea turns out to be doing no work.
 
