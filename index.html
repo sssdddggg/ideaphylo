@@ -1,0 +1,1237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
+<meta name="theme-color" content="#0e1116">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="description" content="Grow phylogenetic trees of ideas.">
+<title>Ideaphylo</title>
+<style>
+/* ---------- tokens ---------- */
+:root{
+  --bg:#0d1117; --bg2:#11161d; --card:#1a212b; --card2:#232d3a;
+  --fg:#e6edf3; --dim:#8b98a8; --faint:#5c6875;
+  --line:#2b3642; --edge:#333f4d; --cardline:transparent;
+  --accent:#79c0ff; --accent2:#1f6feb;
+  --ok:#56d364; --warn:#e3b341; --dead:#6e7681; --danger:#ff7b72;
+  --r:12px; --mid:14px; --rail:20px;
+  --safeb:env(safe-area-inset-bottom,0px);
+  --safet:env(safe-area-inset-top,0px);
+}
+:root[data-theme="light"]{
+  --bg:#f6f8fa; --bg2:#ffffff; --card:#ffffff; --card2:#eef2f6;
+  --fg:#1c2128; --dim:#5c6875; --faint:#8b98a8;
+  --line:#d5dce4; --edge:#c3ccd6; --cardline:#dde3ea;
+  --accent:#0969da; --accent2:#0969da;
+  --ok:#1a7f37; --warn:#9a6700; --dead:#8b98a8; --danger:#cf222e;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;height:100%;overscroll-behavior:none}
+body{
+  background:var(--bg); color:var(--fg);
+  font:15px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,system-ui,sans-serif;
+  display:flex; flex-direction:column;
+  height:100dvh; height:var(--vh,100dvh);
+  -webkit-font-smoothing:antialiased;
+}
+button,input,textarea{font:inherit;color:inherit;font-size:16px}
+button{background:none;border:0;padding:0;cursor:pointer;color:inherit}
+.hide{display:none!important}
+
+/* ---------- header ---------- */
+header{
+  flex:0 0 auto; padding:calc(var(--safet) + 8px) 10px 8px;
+  background:var(--bg2); border-bottom:1px solid var(--line);
+  display:flex; align-items:center; gap:6px; position:relative; z-index:5;
+}
+.brand{font-weight:650;font-size:16px;letter-spacing:.2px;margin-right:auto;display:flex;align-items:center;gap:7px}
+.brand svg{opacity:.9}
+.hbtn{width:36px;height:36px;border-radius:9px;display:grid;place-items:center;font-size:17px;color:var(--dim)}
+.hbtn:active{background:var(--card2)}
+.hbtn.on{background:var(--card2);color:var(--accent)}
+#searchwrap{flex:1;display:flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--edge);border-radius:9px;padding:0 8px}
+#searchwrap input{flex:1;background:none;border:0;outline:none;padding:8px 0;font-size:16px}
+#searchcount{font-size:12px;color:var(--dim);white-space:nowrap}
+
+/* ---------- crumbs / banner ---------- */
+#crumbs{
+  flex:0 0 auto; display:flex; gap:4px; align-items:center; overflow-x:auto;
+  padding:6px 10px; background:var(--bg2); border-bottom:1px solid var(--line);
+  font-size:13px; color:var(--dim); scrollbar-width:none;
+}
+#crumbs::-webkit-scrollbar{display:none}
+#crumbs b{color:var(--fg);font-weight:600}
+#crumbs .cr{white-space:nowrap;padding:3px 7px;border-radius:7px;background:var(--card);max-width:44vw;overflow:hidden;text-overflow:ellipsis}
+#crumbs .sep{opacity:.5}
+#banner{
+  flex:0 0 auto; display:flex; gap:8px; align-items:center; padding:9px 10px;
+  background:var(--accent2); color:#fff; font-size:13.5px; font-weight:500;
+}
+#banner .grow{flex:1;min-width:0}
+#banner button{background:rgba(255,255,255,.18);padding:6px 11px;border-radius:8px;font-size:13px;white-space:nowrap}
+
+/* ---------- tree ---------- */
+main{flex:1 1 auto;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;position:relative}
+#tree{padding:8px 10px 30px 6px;min-height:100%}
+.row{display:flex;align-items:stretch;position:relative;touch-action:pan-y;transition:transform .12s ease}
+.row.dragging{transition:none}
+.rail{position:relative;flex:0 0 var(--rail)}
+.rail.line::before{content:'';position:absolute;left:9px;top:0;bottom:0;width:2px;background:var(--line)}
+.rail.elbow::before{content:'';position:absolute;left:9px;top:0;height:var(--mid);width:2px;background:var(--line)}
+.rail.elbow.cont::before{height:auto;bottom:0}
+.rail.elbow::after{content:'';position:absolute;left:9px;right:2px;top:calc(var(--mid) - 1px);height:2px;background:var(--line)}
+.knob{flex:0 0 24px;display:flex;align-items:flex-start;justify-content:center;padding-top:4px}
+.knob i{
+  display:grid;place-items:center;width:20px;height:20px;border-radius:50%;
+  border:2px solid var(--kc,var(--accent)); background:var(--bg);
+  font-style:normal;font-size:11px;line-height:1;font-weight:700;color:var(--kc,var(--accent));
+}
+.knob i.leaf{width:11px;height:11px;margin:4.5px;background:var(--kc);border-color:var(--kc)}
+.body{
+  flex:1;min-width:0;background:var(--card);border:1px solid var(--cardline);
+  border-radius:10px;padding:5px 10px 6px;margin:1.5px 0;
+}
+.row.sel .body{border-color:var(--accent);background:var(--card2)}
+.row.flash .body{animation:flash .9s ease}
+@keyframes flash{0%{background:var(--accent2)}100%{background:var(--card)}}
+.txt{white-space:pre-wrap;overflow-wrap:anywhere;font-size:15px;line-height:1.32}
+.row.dead .txt{color:var(--dead);text-decoration:line-through;text-decoration-color:var(--dead)}
+.row.strong .txt{font-weight:600}
+.meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px}
+.meta:empty{display:none}
+.tag{font-size:11.5px;padding:1.5px 6px;border-radius:20px;background:var(--card2);color:var(--dim);border:1px solid var(--edge)}
+.tag.st-strong{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 45%,transparent)}
+.tag.st-dead{color:var(--dead)}
+.tag.st-question{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 45%,transparent)}
+.tag.hy{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 45%,transparent)}
+.note{font-size:13px;color:var(--dim);margin-top:3px;white-space:pre-wrap;overflow-wrap:anywhere;
+      border-left:2px solid var(--edge);padding-left:7px;
+      display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:1;overflow:hidden}
+.diverge{font-size:12.5px;color:var(--accent);margin-top:3px;opacity:.85;overflow-wrap:anywhere;
+      display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.row.sel .note,.row.sel .diverge{-webkit-line-clamp:99}
+.kids{font-size:11.5px;color:var(--faint);margin-left:6px}
+mark{background:color-mix(in srgb,var(--warn) 45%,transparent);color:inherit;border-radius:3px;padding:0 1px}
+.editing textarea{
+  width:100%;background:var(--bg);border:1px solid var(--accent);border-radius:8px;
+  padding:6px 8px;outline:none;resize:none;font-size:16px;line-height:1.4;
+}
+.swipehint{position:absolute;top:0;bottom:0;display:grid;place-items:center;font-size:18px;color:var(--accent);opacity:0;pointer-events:none}
+.empty{color:var(--dim);text-align:center;padding:46px 24px;font-size:14px;line-height:1.6}
+.empty b{color:var(--fg)}
+
+/* ---------- map view ---------- */
+#map{flex:1 1 auto;overflow:auto;-webkit-overflow-scrolling:touch;display:none;background:var(--bg)}
+body.mapmode #map{display:block}
+body.mapmode main{display:none}
+#map svg{display:block}
+#map.fit svg{width:100%;height:auto}
+#map text{font:12px -apple-system,system-ui,sans-serif;fill:var(--fg)}
+#map text.dead{fill:var(--dead)}
+#map text.strong{font-weight:700}
+#map .lnk{stroke:var(--line);stroke-width:1.6;fill:none}
+#map .lnk.hy{stroke:var(--accent);stroke-dasharray:3 3;opacity:.7}
+#map circle{stroke-width:2}
+#map .hit{fill:transparent;stroke:none}
+
+/* ---------- composer ---------- */
+#composer{
+  flex:0 0 auto; background:var(--bg2); border-top:1px solid var(--line);
+  padding:8px 10px calc(8px + var(--safeb));
+}
+#target{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--dim);margin-bottom:6px;min-height:20px}
+#target .chip{
+  display:inline-flex;align-items:center;gap:5px;max-width:100%;
+  background:var(--card);border:1px solid var(--edge);border-radius:20px;padding:3px 10px;
+  overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:var(--fg);font-size:12.5px;
+}
+#target .chip.root{color:var(--dim)}
+#target .x{color:var(--dim);font-size:14px;padding:0 2px}
+#target .mode{margin-left:auto;display:flex;gap:4px;flex:0 0 auto}
+#target .mode button{padding:3px 9px;border-radius:20px;border:1px solid var(--edge);font-size:12px;color:var(--dim)}
+#target .mode button.on{background:var(--accent2);border-color:var(--accent2);color:#fff}
+#inputrow{display:flex;gap:8px;align-items:flex-end}
+#entry{
+  flex:1;background:var(--card);border:1px solid var(--edge);border-radius:12px;
+  padding:9px 12px;outline:none;resize:none;max-height:34vh;min-height:42px;line-height:1.4;
+}
+#entry:focus{border-color:var(--accent)}
+#send{
+  flex:0 0 42px;height:42px;border-radius:50%;background:var(--accent2);color:#fff;
+  display:grid;place-items:center;font-size:19px;transition:opacity .15s;
+}
+#send:disabled{opacity:.35}
+
+/* ---------- sheet ---------- */
+#scrim{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:20;opacity:0;transition:opacity .18s}
+#scrim.show{opacity:1}
+.sheet{
+  position:fixed;left:0;right:0;bottom:0;z-index:21;background:var(--bg2);
+  border-radius:18px 18px 0 0;border-top:1px solid var(--line);
+  padding:8px 12px calc(14px + var(--safeb));
+  transform:translateY(102%);transition:transform .22s cubic-bezier(.2,.8,.25,1);
+  box-shadow:0 -14px 44px rgba(0,0,0,.45);
+  max-height:88dvh;overflow-y:auto;
+}
+.sheet.show{transform:none}
+.grab{width:38px;height:4px;border-radius:4px;background:var(--edge);margin:4px auto 10px}
+.sheet h3{margin:0 0 10px;font-size:14px;font-weight:600;color:var(--dim);
+  overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.acts{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.acts button{
+  display:flex;flex-direction:column;align-items:center;gap:5px;padding:11px 3px;
+  background:var(--card);border-radius:11px;font-size:11px;color:var(--dim);line-height:1.2;text-align:center;
+}
+.acts button:active{background:var(--card2)}
+.acts button em{font-style:normal;font-size:19px;color:var(--fg)}
+.acts button.danger em,.acts button.danger{color:var(--danger)}
+.rowbtns{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.rowbtns button{background:var(--card);border:1px solid var(--edge);border-radius:9px;padding:9px 13px;font-size:13.5px}
+.rowbtns button.on{border-color:var(--accent);color:var(--accent)}
+.sect{margin-top:14px;font-size:12px;color:var(--faint);text-transform:uppercase;letter-spacing:.6px}
+.menu button{display:flex;align-items:center;gap:12px;width:100%;padding:13px 6px;border-bottom:1px solid var(--line);font-size:15px;text-align:left}
+.menu button:last-child{border-bottom:0}
+.menu button em{font-style:normal;width:22px;text-align:center;font-size:17px}
+.menu button small{margin-left:auto;color:var(--dim);font-size:12px}
+.sheet textarea,.sheet input[type=text]{
+  width:100%;background:var(--card);border:1px solid var(--edge);border-radius:10px;
+  padding:10px;outline:none;resize:vertical;margin-top:8px;line-height:1.4;
+}
+.sheet textarea:focus,.sheet input:focus{border-color:var(--accent)}
+.sheet .pair{display:flex;gap:8px;margin-top:10px}
+.sheet .pair button{flex:1;padding:12px;border-radius:10px;background:var(--card);font-size:15px}
+.sheet .pair button.pri{background:var(--accent2);color:#fff;font-weight:600}
+#toast{
+  position:fixed;left:50%;bottom:calc(96px + var(--safeb));transform:translate(-50%,10px);
+  background:var(--card2);border:1px solid var(--edge);color:var(--fg);padding:9px 14px;
+  border-radius:22px;font-size:13.5px;z-index:40;opacity:0;transition:.18s;pointer-events:none;
+  display:flex;align-items:center;gap:10px;max-width:92vw;
+}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+#toast button{color:var(--accent);font-weight:600;font-size:13.5px}
+.help{font-size:13.5px;line-height:1.65;color:var(--dim)}
+.help b{color:var(--fg)}
+.help kbd{background:var(--card);border:1px solid var(--edge);border-radius:5px;padding:1px 5px;font-size:12px}
+.help ul{margin:6px 0;padding-left:18px}
+@media (min-width:760px){
+  #tree{max-width:820px;margin:0 auto;padding-left:14px}
+  #composer>*{max-width:820px;margin-left:auto;margin-right:auto}
+  .sheet{max-width:640px;left:50%;transform:translate(-50%,102%);border-radius:18px 18px 0 0}
+  .sheet.show{transform:translate(-50%,0)}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand" id="brand">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <path d="M4 20V4"/><path d="M4 8h6"/><path d="M4 16h6"/><path d="M10 8v-4h8"/><path d="M10 8v4h8"/><path d="M10 16v4h8"/>
+    </svg>
+    <span>Ideaphylo</span>
+  </div>
+  <div id="searchwrap" class="hide">
+    <span style="color:var(--dim)">⌕</span>
+    <input id="q" type="search" placeholder="Search ideas…" enterkeyhint="search" autocomplete="off">
+    <span id="searchcount"></span>
+  </div>
+  <button class="hbtn" id="btnSearch" title="Search" aria-label="Search">⌕</button>
+  <button class="hbtn" id="btnMap" title="Map view" aria-label="Map view">◱</button>
+  <button class="hbtn" id="btnMenu" title="Menu" aria-label="Menu">☰</button>
+</header>
+
+<div id="banner" class="hide">
+  <span class="grow" id="bannerText"></span>
+  <button id="bannerAlt" class="hide"></button>
+  <button id="bannerCancel">Cancel</button>
+</div>
+
+<div id="crumbs" class="hide"></div>
+
+<main id="scroller"><div id="tree"></div></main>
+<div id="map"></div>
+
+<div id="composer">
+  <div id="target"></div>
+  <div id="inputrow">
+    <textarea id="entry" rows="1" placeholder="Plant an idea…" enterkeyhint="send"></textarea>
+    <button id="send" aria-label="Add">↵</button>
+  </div>
+</div>
+
+<div id="scrim" class="hide"></div>
+
+<div class="sheet" id="sheetNode">
+  <div class="grab"></div>
+  <h3 id="sheetTitle"></h3>
+  <div class="acts">
+    <button data-act="child"><em>↳</em>Branch</button>
+    <button data-act="sibling"><em>⇢</em>Sibling</button>
+    <button data-act="edit"><em>✎</em>Edit</button>
+    <button data-act="focus"><em>⌖</em>Focus</button>
+    <button data-act="note"><em>🗒</em>Note</button>
+    <button data-act="diverge"><em>Δ</em>Change</button>
+    <button data-act="move"><em>⇱</em>Move</button>
+    <button data-act="hybrid"><em>⤳</em>Merge</button>
+    <button data-act="indent"><em>→</em>Indent</button>
+    <button data-act="outdent"><em>←</em>Outdent</button>
+    <button data-act="dup"><em>⧉</em>Copy</button>
+    <button data-act="delete" class="danger"><em>🗑</em>Delete</button>
+  </div>
+  <div class="sect">Status</div>
+  <div class="rowbtns" id="statusRow">
+    <button data-st="">◦ Live</button>
+    <button data-st="strong">★ Thriving</button>
+    <button data-st="question">? Untested</button>
+    <button data-st="dead">✕ Dead end</button>
+  </div>
+  <div class="sect">Order</div>
+  <div class="rowbtns">
+    <button data-act="up">↑ Move up</button>
+    <button data-act="down">↓ Move down</button>
+    <button data-act="collapse">⌄ Collapse all below</button>
+  </div>
+</div>
+
+<div class="sheet" id="sheetMenu">
+  <div class="grab"></div>
+  <div class="menu">
+    <button data-m="expand"><em>⌄</em>Expand all</button>
+    <button data-m="collapse"><em>›</em>Collapse all</button>
+    <button data-m="unfocus"><em>⌂</em>Back to whole forest</button>
+    <button data-m="paste"><em>⤓</em>Import outline (paste text)</button>
+    <button data-m="exportmd"><em>↗</em>Export as Markdown</button>
+    <button data-m="exportjson"><em>{}</em>Export as JSON <small id="statLine"></small></button>
+    <button data-m="importjson"><em>⤒</em>Import JSON file</button>
+    <button data-m="theme"><em>◐</em>Toggle theme</button>
+    <button data-m="demo"><em>✦</em>Load example tree</button>
+    <button data-m="help"><em>?</em>How it works</button>
+    <button data-m="wipe" style="color:var(--danger)"><em>🗑</em>Delete everything</button>
+  </div>
+</div>
+
+<div class="sheet" id="sheetText">
+  <div class="grab"></div>
+  <h3 id="textTitle"></h3>
+  <textarea id="textArea" rows="4"></textarea>
+  <div class="pair"><button id="textCancel">Cancel</button><button id="textOk" class="pri">Save</button></div>
+</div>
+
+<div class="sheet" id="sheetHelp">
+  <div class="grab"></div>
+  <h3>How it works</h3>
+  <div class="help" id="helpBody"></div>
+  <div class="pair"><button id="helpClose" class="pri">Got it</button></div>
+</div>
+
+<input type="file" id="fileIn" accept="application/json,.json" class="hide">
+<div id="toast"><span id="toastMsg"></span><button id="toastAct" class="hide"></button></div>
+
+<script>
+"use strict";
+/* =========================================================================
+   Ideaphylo — phylogenetic trees of ideas.
+   Node: {id, text, note, diverge, status, parent, children[], collapsed, hybrids[], created}
+   ========================================================================= */
+const KEY = "ideaphylo.v1";
+const $  = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+
+let S = { nodes:{}, roots:[], focus:null, theme:null };
+let sel = null;              // selected node id
+let mode = "child";          // "child" | "sibling"
+let query = "";
+let matches = new Set(), openForSearch = new Set();
+let pick = null;             // {kind:"move"|"hybrid", id}
+let undoStack = [], redoStack = [];
+
+const uid = () => Math.random().toString(36).slice(2,9) + Date.now().toString(36).slice(-3);
+const N   = id => S.nodes[id];
+
+/* ---------- persistence ---------- */
+let saveTimer = null;
+function save(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    try { localStorage.setItem(KEY, JSON.stringify(S)); }
+    catch(e){ toast("Could not save — storage full?"); }
+  }, 180);
+}
+function load(){
+  try{
+    const raw = localStorage.getItem(KEY);
+    if(!raw) return false;
+    const d = JSON.parse(raw);
+    if(!d || !d.nodes) return false;
+    S = Object.assign({ nodes:{}, roots:[], focus:null, theme:null }, d);
+    // integrity pass: drop orphans, rebuild missing links
+    for(const id in S.nodes){
+      const n = S.nodes[id];
+      n.children = (n.children||[]).filter(c => S.nodes[c]);
+      n.hybrids  = (n.hybrids||[]).filter(c => S.nodes[c] && c !== id);
+      if(n.parent && !S.nodes[n.parent]) n.parent = null;
+    }
+    S.roots = (S.roots||[]).filter(r => S.nodes[r]);
+    for(const id in S.nodes) if(!S.nodes[id].parent && !S.roots.includes(id)) S.roots.push(id);
+    if(S.focus && !S.nodes[S.focus]) S.focus = null;
+    return true;
+  }catch(e){ return false; }
+}
+
+/* ---------- undo ---------- */
+function snapshot(){ return JSON.stringify({nodes:S.nodes, roots:S.roots, focus:S.focus}); }
+function pushUndo(){
+  undoStack.push({ snap:snapshot(), sel });
+  if(undoStack.length > 60) undoStack.shift();
+  redoStack.length = 0;
+}
+function applySnap(o){
+  const d = JSON.parse(o.snap);
+  S.nodes = d.nodes; S.roots = d.roots; S.focus = d.focus;
+  sel = o.sel && S.nodes[o.sel] ? o.sel : null;
+}
+function undo(){
+  if(!undoStack.length) return toast("Nothing to undo");
+  redoStack.push({ snap:snapshot(), sel });
+  applySnap(undoStack.pop()); save(); render(); toast("Undone");
+}
+function redo(){
+  if(!redoStack.length) return toast("Nothing to redo");
+  undoStack.push({ snap:snapshot(), sel });
+  applySnap(redoStack.pop()); save(); render(); toast("Redone");
+}
+
+/* ---------- model ---------- */
+function makeNode(text, parent){
+  const n = { id:uid(), text:(text||"").trim(), note:"", diverge:"", status:"",
+              parent:parent||null, children:[], collapsed:false, hybrids:[], created:Date.now() };
+  S.nodes[n.id] = n;
+  return n;
+}
+function addChild(parentId, text){
+  const n = makeNode(text, parentId);
+  if(parentId){ N(parentId).children.push(n.id); N(parentId).collapsed = false; }
+  else S.roots.push(n.id);
+  return n.id;
+}
+function addSibling(id, text){
+  const n = N(id); if(!n) return addChild(null, text);
+  const k = makeNode(text, n.parent);
+  const arr = siblingsOf(id);
+  arr.splice(arr.indexOf(id)+1, 0, k.id);
+  return k.id;
+}
+function siblingsOf(id){ const n = N(id); return n.parent ? N(n.parent).children : S.roots; }
+function detach(id){
+  const arr = siblingsOf(id), i = arr.indexOf(id);
+  if(i > -1) arr.splice(i,1);
+}
+function isAncestor(a, b){ // is a an ancestor of (or equal to) b
+  let c = b;
+  while(c){ if(c === a) return true; c = N(c) ? N(c).parent : null; }
+  return false;
+}
+function reparent(id, newParent, index){
+  if(newParent && isAncestor(id, newParent)) return false;
+  detach(id);
+  N(id).parent = newParent || null;
+  const arr = newParent ? N(newParent).children : S.roots;
+  if(index == null || index < 0 || index > arr.length) arr.push(id); else arr.splice(index,0,id);
+  if(newParent) N(newParent).collapsed = false;
+  return true;
+}
+function indent(id){
+  const arr = siblingsOf(id), i = arr.indexOf(id);
+  if(i <= 0) return false;
+  return reparent(id, arr[i-1], null);
+}
+function outdent(id){
+  const n = N(id); if(!n.parent) return false;
+  const p = N(n.parent);
+  const gArr = p.parent ? N(p.parent).children : S.roots;
+  return reparent(id, p.parent, gArr.indexOf(p.id) + 1);
+}
+function shift(id, dir){
+  const arr = siblingsOf(id), i = arr.indexOf(id), j = i + dir;
+  if(i < 0 || j < 0 || j >= arr.length) return false;
+  arr.splice(i,1); arr.splice(j,0,id); return true;
+}
+function subtreeIds(id, out){
+  out = out || []; out.push(id);
+  N(id).children.forEach(c => subtreeIds(c, out));
+  return out;
+}
+function removeSubtree(id){
+  const ids = subtreeIds(id);
+  detach(id);
+  ids.forEach(x => { delete S.nodes[x]; });
+  for(const k in S.nodes) S.nodes[k].hybrids = S.nodes[k].hybrids.filter(h => S.nodes[h]);
+  if(S.focus && !S.nodes[S.focus]) S.focus = null;
+  if(sel && !S.nodes[sel]) sel = null;
+}
+function removeOnly(id){ // delete node, lift its children into its place
+  const n = N(id), arr = siblingsOf(id), i = arr.indexOf(id);
+  const kids = n.children.slice();
+  arr.splice(i, 1, ...kids);
+  kids.forEach(k => N(k).parent = n.parent);
+  delete S.nodes[id];
+  for(const k in S.nodes) S.nodes[k].hybrids = S.nodes[k].hybrids.filter(h => S.nodes[h]);
+  if(sel === id) sel = kids[0] || n.parent || null;
+  if(S.focus === id) S.focus = n.parent || null;
+}
+function duplicate(id){
+  const n = N(id);
+  const clone = (srcId, parent) => {
+    const s = N(srcId);
+    const c = makeNode(s.text, parent);
+    c.note = s.note; c.diverge = s.diverge; c.status = s.status; c.collapsed = s.collapsed;
+    c.hybrids = s.hybrids.slice();
+    s.children.forEach(k => c.children.push(clone(k, c.id)));
+    return c.id;
+  };
+  const newId = clone(id, n.parent);
+  const arr = siblingsOf(id);
+  detach(newId);
+  arr.splice(arr.indexOf(id)+1, 0, newId);
+  N(newId).parent = n.parent;
+  return newId;
+}
+function pathTo(id){
+  const p = []; let c = id;
+  while(c){ p.unshift(c); c = N(c).parent; }
+  return p;
+}
+function depthOf(id){ return pathTo(id).length - 1; }
+function countAll(id){ return subtreeIds(id).length - 1; }
+function totalNodes(){ return Object.keys(S.nodes).length; }
+
+/* ---------- helpers ---------- */
+const esc = s => (s||"").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function hl(s){
+  const e = esc(s);
+  if(!query) return e;
+  try{
+    const rx = new RegExp("(" + query.replace(/[.*+?^${}()|[\]\\]/g,"\\$&") + ")", "ig");
+    return e.replace(rx, "<mark>$1</mark>");
+  }catch(_){ return e; }
+}
+const hue = d => `hsl(${(d*47 + 196) % 360} 70% 62%)`;
+function toast(msg, actionLabel, fn){
+  const t = $("#toast"), b = $("#toastAct");
+  $("#toastMsg").textContent = msg;
+  b.classList.toggle("hide", !actionLabel);
+  if(actionLabel){ b.textContent = actionLabel; b.onclick = () => { hideToast(); fn && fn(); }; }
+  t.classList.add("show");
+  clearTimeout(toast._t); toast._t = setTimeout(hideToast, actionLabel ? 5200 : 2200);
+}
+function hideToast(){ $("#toast").classList.remove("show"); }
+function buzz(ms){ try{ navigator.vibrate && navigator.vibrate(ms); }catch(_){} }
+
+/* ---------- search index ---------- */
+let searchVisible = new Set();
+function computeSearch(){
+  matches = new Set(); searchVisible = new Set();
+  if(!query) return;
+  const q = query.toLowerCase();
+  for(const id in S.nodes){
+    const n = S.nodes[id];
+    if((n.text + " " + n.note + " " + n.diverge).toLowerCase().includes(q)) matches.add(id);
+  }
+  matches.forEach(id => pathTo(id).forEach(p => searchVisible.add(p)));
+  $("#searchcount").textContent = matches.size ? matches.size + " hit" + (matches.size>1?"s":"") : "none";
+}
+
+/* ---------- render ---------- */
+function rowsToRender(){
+  const rows = [];
+  const rootsList = S.focus ? [S.focus] : S.roots;
+  const walk = (id, depth, anc) => {
+    const n = N(id); if(!n) return;
+    if(query && !searchVisible.has(id)) return;
+    const kids = n.children.filter(c => !query || searchVisible.has(c));
+    rows.push({ id, depth, anc, kids:kids.length });
+    if(!query && n.collapsed) return;
+    kids.forEach((c,i) => walk(c, depth+1, anc.concat(i < kids.length-1)));
+  };
+  rootsList.forEach(r => walk(r, 0, []));
+  return rows;
+}
+function rowHTML(r){
+  const n = N(r.id);
+  const kc = hue(depthOf(r.id));
+  let rails = "";
+  for(let i=0;i<r.depth;i++){
+    if(i === r.depth-1) rails += `<span class="rail elbow${r.anc[i]?" cont":""}"></span>`;
+    else rails += `<span class="rail${r.anc[i]?" line":""}"></span>`;
+  }
+  const hidden = n.collapsed && n.children.length;
+  const knob = r.kids || n.children.length
+    ? `<i style="--kc:${kc}">${hidden ? (countAll(n.id) > 9 ? "+" : countAll(n.id)) : "−"}</i>`
+    : `<i class="leaf" style="--kc:${kc}"></i>`;
+  const meta = [];
+  if(n.status === "strong")   meta.push(`<span class="tag st-strong">★ thriving</span>`);
+  if(n.status === "dead")     meta.push(`<span class="tag st-dead">✕ dead end</span>`);
+  if(n.status === "question") meta.push(`<span class="tag st-question">? untested</span>`);
+  n.hybrids.forEach(h => { if(N(h)) meta.push(`<span class="tag hy" data-jump="${h}">⤳ ${esc(short(N(h).text))}</span>`); });
+  if(hidden) meta.push(`<span class="tag">${countAll(n.id)} hidden</span>`);
+  return `<div class="row${sel===r.id?" sel":""}${n.status?" "+n.status:""}" data-id="${r.id}">
+    ${rails}
+    <div class="knob" data-toggle="1">${knob}</div>
+    <div class="body">
+      <div class="txt">${hl(n.text) || '<span style="color:var(--faint)">(empty)</span>'}</div>
+      ${n.diverge ? `<div class="diverge">Δ ${hl(n.diverge)}</div>` : ""}
+      ${n.note ? `<div class="note">${hl(n.note)}</div>` : ""}
+      ${meta.length ? `<div class="meta">${meta.join("")}</div>` : ""}
+    </div>
+  </div>`;
+}
+const short = (t,l) => { t = (t||"").replace(/\s+/g," ").trim(); l = l||22; return t.length>l ? t.slice(0,l-1)+"…" : t; };
+
+function render(){
+  computeSearch();
+  const rows = rowsToRender();
+  const tree = $("#tree");
+  if(!rows.length){
+    tree.innerHTML = query
+      ? `<div class="empty">No idea matches <b>${esc(query)}</b>.</div>`
+      : `<div class="empty"><b>Nothing here yet.</b><br>Type an idea below and press ↵ to plant the first one.<br><br>Then select it and keep typing — each new line becomes a descendant.</div>`;
+  } else {
+    tree.innerHTML = rows.map(rowHTML).join("");
+  }
+  renderCrumbs();
+  renderTarget();
+  $("#statLine").textContent = totalNodes() + " nodes";
+  if(document.body.classList.contains("mapmode")) renderMap();
+  save();
+}
+
+function renderCrumbs(){
+  const c = $("#crumbs");
+  if(!S.focus){ c.classList.add("hide"); return; }
+  c.classList.remove("hide");
+  const path = pathTo(S.focus);
+  let h = `<button class="cr" data-focus="">⌂ all</button>`;
+  path.forEach((id,i) => {
+    h += `<span class="sep">›</span>`;
+    h += i === path.length-1
+      ? `<span class="cr"><b>${esc(short(N(id).text,26))}</b></span>`
+      : `<button class="cr" data-focus="${id}">${esc(short(N(id).text,18))}</button>`;
+  });
+  c.innerHTML = h;
+}
+
+function renderTarget(){
+  const t = $("#target");
+  const modeBtns = `<span class="mode">
+      <button data-mode="child" class="${mode==="child"?"on":""}">↳ child</button>
+      <button data-mode="sibling" class="${mode==="sibling"?"on":""}">⇢ sibling</button>
+    </span>`;
+  if(!sel || !N(sel)){
+    t.innerHTML = `<span class="chip root">⌂ new root lineage</span>`;
+    $("#entry").placeholder = totalNodes() ? "Plant a new root idea…" : "Plant an idea…";
+    return;
+  }
+  const verb = mode === "child" ? "descends from" : "sibling of";
+  t.innerHTML = `<span class="chip">${verb} <b style="font-weight:600">${esc(short(N(sel).text,20))}</b>
+      <button class="x" data-clear="1">✕</button></span>${modeBtns}`;
+  $("#entry").placeholder = mode === "child" ? "A variation of this idea…" : "Another idea alongside…";
+}
+
+function scrollToNode(id, flash){
+  const el = document.querySelector(`.row[data-id="${id}"]`);
+  if(!el) return;
+  el.scrollIntoView({ block:"center", behavior:"smooth" });
+  if(flash){ el.classList.add("flash"); setTimeout(()=>el.classList.remove("flash"), 950); }
+}
+function revealNode(id){
+  pathTo(id).slice(0,-1).forEach(p => N(p).collapsed = false);
+  if(S.focus && !isAncestor(S.focus, id)) S.focus = null;
+}
+
+/* ---------- selection, tap, long-press, swipe ---------- */
+const scroller = $("#scroller");
+let g = null; // gesture state
+
+$("#tree").addEventListener("pointerdown", e => {
+  if(pick) return;
+  const row = e.target.closest(".row");
+  if(!row || $("#tree").querySelector(".editing")) return;
+  g = { id:row.dataset.id, row, x:e.clientX, y:e.clientY, dx:0, dy:0, drag:false, dead:false,
+        long:setTimeout(() => { if(g && !g.drag){ g.dead = true; buzz(14); openNodeSheet(g.id); } }, 480) };
+});
+$("#tree").addEventListener("pointermove", e => {
+  if(!g) return;
+  g.dx = e.clientX - g.x; g.dy = e.clientY - g.y;
+  if(!g.drag && Math.abs(g.dy) > 9 && Math.abs(g.dy) > Math.abs(g.dx)){ clearTimeout(g.long); g = null; return; }
+  if(!g.drag && Math.abs(g.dx) > 12 && Math.abs(g.dx) > Math.abs(g.dy)){
+    g.drag = true; clearTimeout(g.long); g.row.classList.add("dragging");
+  }
+  if(g.drag){
+    const lim = Math.max(-90, Math.min(90, g.dx));
+    g.row.style.transform = `translateX(${lim}px)`;
+    g.row.style.opacity = Math.abs(lim) > 52 ? 1 : .72;
+  }
+});
+function endGesture(e, cancelled){
+  if(!g) return;
+  clearTimeout(g.long);
+  const { id, row, dx, drag, dead } = g;
+  row.style.transform = ""; row.style.opacity = ""; row.classList.remove("dragging");
+  g = null;
+  if(cancelled || dead) return;
+  if(drag){
+    if(Math.abs(dx) > 52){
+      pushUndo();
+      const ok = dx > 0 ? indent(id) : outdent(id);
+      if(ok){ buzz(10); sel = id; render(); scrollToNode(id, true); }
+      else { undoStack.pop(); toast(dx > 0 ? "Nothing above to branch from" : "Already a root lineage"); }
+    }
+    return;
+  }
+  // plain tap
+  const t = e.target;
+  const jump = t.closest("[data-jump]");
+  if(jump){ const j = jump.dataset.jump; revealNode(j); sel = j; render(); scrollToNode(j, true); return; }
+  if(t.closest("[data-toggle]")){
+    const n = N(id);
+    if(n.children.length){ n.collapsed = !n.collapsed; render(); }
+    else { sel = id; render(); }
+    return;
+  }
+  if(sel === id) startEdit(id);
+  else { sel = id; render(); }
+}
+$("#tree").addEventListener("pointerup", e => endGesture(e, false));
+$("#tree").addEventListener("pointercancel", () => endGesture(null, true));
+/* the row can be re-rendered mid-press, detaching the event target — catch the tail here */
+window.addEventListener("pointerup", () => { if(g){ clearTimeout(g.long); g = null; } });
+window.addEventListener("pointercancel", () => endGesture(null, true));
+scroller.addEventListener("scroll", () => { if(g && !g.drag){ clearTimeout(g.long); g = null; } }, {passive:true});
+
+/* ---------- inline edit ---------- */
+function startEdit(id){
+  const row = document.querySelector(`.row[data-id="${id}"]`); if(!row) return;
+  const holder = row.querySelector(".txt");
+  const n = N(id);
+  row.classList.add("editing");
+  holder.innerHTML = `<textarea rows="1" enterkeyhint="done"></textarea>`;
+  const ta = holder.querySelector("textarea");
+  ta.value = n.text;
+  const grow = () => { ta.style.height = "auto"; ta.style.height = ta.scrollHeight + "px"; };
+  grow(); ta.addEventListener("input", grow);
+  ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+  let done = false;
+  const commit = keep => {
+    if(done) return; done = true;
+    const v = ta.value.trim();
+    if(keep && v !== n.text){ pushUndo(); n.text = v; }
+    row.classList.remove("editing");
+    render();
+  };
+  ta.addEventListener("blur", () => commit(true));
+  ta.addEventListener("keydown", ev => {
+    if(ev.key === "Enter" && !ev.shiftKey){ ev.preventDefault(); commit(true); }
+    else if(ev.key === "Escape"){ ev.preventDefault(); commit(false); }
+    else if(ev.key === "Tab"){ ev.preventDefault(); commit(true); pushUndo();
+      (ev.shiftKey ? outdent : indent)(id); sel = id; render(); }
+  });
+}
+
+/* ---------- composer ---------- */
+const entry = $("#entry");
+function autosize(){ entry.style.height = "auto"; entry.style.height = Math.min(entry.scrollHeight, window.innerHeight*0.34) + "px"; }
+entry.addEventListener("input", () => { autosize(); $("#send").disabled = !entry.value.trim(); });
+entry.addEventListener("keydown", e => {
+  if(e.key === "Enter" && !e.shiftKey && !e.isComposing){ e.preventDefault(); submitEntry(); }
+});
+$("#send").addEventListener("click", submitEntry);
+$("#send").disabled = true;
+
+const ST_GLYPH = { strong:" \u2605", dead:" \u2715", question:" \u2047" };
+const GLYPH_ST = { "\u2605":"strong", "\u2715":"dead", "\u2047":"question" };
+function parseOutline(raw){
+  const rows = [];
+  raw.replace(/\r/g,"").split("\n").forEach(ln => {
+    if(!ln.trim()) return;
+    const ind = (ln.match(/^[\t ]*/)[0] || "").replace(/\t/g,"    ").length;
+    let text = ln.trim().replace(/^([-*+•>]|\d+[.)])\s+/, "").trim();
+    if(!text) return;
+    // metadata lines belong to the idea above them, not to the tree
+    const meta = text.match(/^(\u0394|\u270e|\u2933)\s*(.*)$/);
+    if(meta){
+      const kind = meta[1] === "\u0394" ? "diverge" : meta[1] === "\u270e" ? "note" : "skip";
+      rows.push({ ind, text:meta[2], meta:kind });
+      return;
+    }
+    let status = "";
+    const g = text.match(/\s([\u2605\u2715\u2047])$/);
+    if(g){ status = GLYPH_ST[g[1]]; text = text.slice(0, -2).trim(); }
+    rows.push({ ind, text, status });
+  });
+  const lv = [];
+  return rows.map(o => {
+    if(o.meta) return { depth:-1, text:o.text, meta:o.meta };
+    while(lv.length && lv[lv.length-1] > o.ind) lv.pop();
+    if(!lv.length || lv[lv.length-1] < o.ind) lv.push(o.ind);
+    return { depth: lv.length-1, text:o.text, status:o.status };
+  }).filter(o => o.meta !== "skip");
+}
+/* grow a parsed outline into the tree. base = parent for depth-0 items,
+   after = grow depth-0 items as successive siblings of this id instead.  */
+function insertItems(items, base, after){
+  const stack = [];
+  let first = null, last = null, grown = 0;
+  items.forEach(it => {
+    if(it.meta){                       // attach to the idea it followed…
+      if(last){ if(it.meta === "diverge") N(last).diverge = it.text; else N(last).note = it.text; return; }
+      it = { depth:0, text:it.text };   // …or stand alone if there is none
+    }
+    let id;
+    if(it.depth === 0){
+      if(after){ id = addSibling(after, it.text); after = id; }
+      else id = addChild(base, it.text);
+    } else {
+      id = addChild(stack[it.depth-1] != null ? stack[it.depth-1] : (stack[0] || base), it.text);
+    }
+    if(it.status) N(id).status = it.status;
+    stack[it.depth] = id; stack.length = it.depth + 1;
+    last = id; grown++;
+    if(!first) first = id;
+  });
+  return { first, after, grown };
+}
+function submitEntry(){
+  const raw = entry.value;
+  if(!raw.trim()) return;
+  pushUndo();
+  const items = parseOutline(raw);
+  const base  = (mode === "child" && sel) ? sel : (sel ? N(sel).parent : null);
+  const { first, after } = insertItems(items, base, (mode === "sibling" && sel) ? sel : null);
+  if(!first){ undoStack.pop(); return; }
+  if(mode === "sibling") sel = after || sel;
+  entry.value = ""; autosize(); $("#send").disabled = true;
+  render();
+  scrollToNode(first, true);
+  if(mode === "child" && items.length === 1){
+    toast("Branched", "↳ continue from it", () => { sel = first; render(); scrollToNode(first); entry.focus(); });
+  }
+}
+$("#target").addEventListener("click", e => {
+  const m = e.target.closest("[data-mode]");
+  if(m){ mode = m.dataset.mode; renderTarget(); entry.focus(); return; }
+  if(e.target.closest("[data-clear]")){ sel = null; render(); }
+});
+$("#crumbs").addEventListener("click", e => {
+  const b = e.target.closest("[data-focus]");
+  if(!b) return;
+  S.focus = b.dataset.focus || null;
+  render(); scroller.scrollTop = 0;
+});
+
+/* ---------- sheets ---------- */
+let openSheet = null;
+function showSheet(id){
+  closeSheet();
+  openSheet = $(id);
+  $("#scrim").classList.remove("hide");
+  requestAnimationFrame(() => { $("#scrim").classList.add("show"); openSheet.classList.add("show"); });
+}
+function closeSheet(){
+  if(openSheet){ openSheet.classList.remove("show"); openSheet = null; }
+  $("#scrim").classList.remove("show");
+  setTimeout(() => { if(!openSheet) $("#scrim").classList.add("hide"); }, 200);
+}
+$("#scrim").addEventListener("click", closeSheet);
+$$(".grab").forEach(el => el.addEventListener("click", closeSheet));
+
+let sheetId = null;
+function openNodeSheet(id){
+  sheetId = id; sel = id; render();
+  $("#sheetTitle").textContent = N(id).text || "(empty idea)";
+  $$("#statusRow button").forEach(b => b.classList.toggle("on", (N(id).status||"") === b.dataset.st));
+  showSheet("#sheetNode");
+}
+$("#statusRow").addEventListener("click", e => {
+  const b = e.target.closest("[data-st]"); if(!b) return;
+  pushUndo(); N(sheetId).status = b.dataset.st;
+  $$("#statusRow button").forEach(x => x.classList.toggle("on", x === b));
+  render();
+});
+$("#sheetNode").addEventListener("click", e => {
+  const b = e.target.closest("[data-act]"); if(!b) return;
+  const id = sheetId, n = N(id);
+  const act = b.dataset.act;
+  const after = () => { render(); scrollToNode(id, true); };
+  if(act === "child"){ closeSheet(); sel = id; mode = "child"; render(); entry.focus(); return; }
+  if(act === "sibling"){ closeSheet(); sel = id; mode = "sibling"; render(); entry.focus(); return; }
+  if(act === "edit"){ closeSheet(); startEdit(id); return; }
+  if(act === "focus"){ closeSheet(); S.focus = id; sel = id; render(); scroller.scrollTop = 0; return; }
+  if(act === "note"){ closeSheet(); askText("Note", n.note, v => { pushUndo(); n.note = v; render(); },
+      "Evidence, caveats, sources — anything that fleshes this idea out."); return; }
+  if(act === "diverge"){ closeSheet(); askText("What changed?", n.diverge, v => { pushUndo(); n.diverge = v; render(); },
+      "How this idea departs from its ancestor — the mutation that makes it a new branch."); return; }
+  if(act === "move"){ closeSheet(); startPick("move", id); return; }
+  if(act === "hybrid"){ closeSheet(); startPick("hybrid", id); return; }
+  if(act === "indent"){ pushUndo(); if(!indent(id)) { undoStack.pop(); toast("Nothing above to branch from"); } after(); return; }
+  if(act === "outdent"){ pushUndo(); if(!outdent(id)) { undoStack.pop(); toast("Already a root lineage"); } after(); return; }
+  if(act === "up"){ pushUndo(); shift(id,-1); after(); return; }
+  if(act === "down"){ pushUndo(); shift(id, 1); after(); return; }
+  if(act === "collapse"){ subtreeIds(id).forEach(x => { if(x !== id && N(x).children.length) N(x).collapsed = true; }); render(); return; }
+  if(act === "dup"){ pushUndo(); const nid = duplicate(id); closeSheet(); sel = nid; render(); scrollToNode(nid, true); toast("Branch copied"); return; }
+  if(act === "delete"){
+    const kids = countAll(id);
+    closeSheet();
+    if(!kids){ pushUndo(); removeSubtree(id); render(); toast("Deleted", "Undo", undo); return; }
+    askChoice(`Delete “${short(n.text,30)}”`, [
+      { label:`Delete whole branch (${kids+1} ideas)`, danger:true, fn(){ pushUndo(); removeSubtree(id); render(); toast("Branch deleted", "Undo", undo); } },
+      { label:"Delete this idea only, keep descendants", fn(){ pushUndo(); removeOnly(id); render(); toast("Idea removed", "Undo", undo); } }
+    ]);
+    return;
+  }
+});
+
+/* generic text sheet */
+function askText(title, value, ok, placeholder){
+  $("#textTitle").textContent = title;
+  const ta = $("#textArea");
+  ta.value = value || ""; ta.placeholder = placeholder || "";
+  $("#textOk").onclick = () => { closeSheet(); ok(ta.value.trim()); };
+  $("#textCancel").onclick = closeSheet;
+  showSheet("#sheetText");
+  ta.focus();
+}
+/* generic choice sheet, reuses the node sheet shell via the help sheet */
+function askChoice(title, options){
+  $("#helpBody").innerHTML = "";
+  $("#sheetHelp").querySelector("h3").textContent = title;
+  const wrap = document.createElement("div");
+  options.forEach(o => {
+    const b = document.createElement("button");
+    b.textContent = o.label;
+    b.style.cssText = "display:block;width:100%;text-align:left;padding:14px 12px;margin-bottom:8px;background:var(--card);border-radius:11px;font-size:15px;" + (o.danger ? "color:var(--danger)" : "");
+    b.onclick = () => { closeSheet(); o.fn(); };
+    wrap.appendChild(b);
+  });
+  $("#helpBody").appendChild(wrap);
+  $("#helpClose").textContent = "Cancel";
+  $("#helpClose").onclick = closeSheet;
+  showSheet("#sheetHelp");
+}
+
+/* ---------- pick mode (move / merge) ---------- */
+function startPick(kind, id){
+  pick = { kind, id };
+  const b = $("#banner");
+  b.classList.remove("hide");
+  $("#bannerText").textContent = kind === "move"
+    ? `Tap the idea “${short(N(id).text,22)}” should descend from`
+    : `Tap the second ancestor that “${short(N(id).text,22)}” also draws on`;
+  const alt = $("#bannerAlt");
+  alt.classList.toggle("hide", kind !== "move");
+  alt.textContent = "Make root";
+  if(S.focus){ S.focus = null; }
+  render();
+}
+function endPick(){ pick = null; $("#banner").classList.add("hide"); render(); }
+$("#bannerCancel").addEventListener("click", endPick);
+$("#bannerAlt").addEventListener("click", () => {
+  if(pick && pick.kind === "move"){ pushUndo(); reparent(pick.id, null, null); const id = pick.id; endPick(); scrollToNode(id, true); toast("Now a root lineage"); }
+});
+$("#tree").addEventListener("click", e => {
+  if(!pick) return;
+  const row = e.target.closest(".row"); if(!row) return;
+  e.stopPropagation();
+  const target = row.dataset.id, id = pick.id, kind = pick.kind;
+  if(kind === "move"){
+    if(target === id){ toast("Pick a different idea"); return; }
+    pushUndo();
+    if(!reparent(id, target, null)){ undoStack.pop(); toast("Can’t move a branch into itself"); return; }
+    endPick(); sel = id; render(); scrollToNode(id, true); toast("Moved");
+  } else {
+    if(target === id){ toast("Pick a different idea"); return; }
+    pushUndo();
+    const h = N(id).hybrids;
+    if(h.includes(target)) h.splice(h.indexOf(target),1); else h.push(target);
+    endPick(); sel = id; render(); scrollToNode(id, true); toast("Hybrid link updated");
+  }
+}, true);
+
+/* ---------- map view (classic left→right cladogram) ---------- */
+const _mctx = document.createElement("canvas").getContext("2d");
+function fitText(str, px, bold){
+  _mctx.font = (bold ? "700 " : "") + '12px -apple-system,system-ui,sans-serif';
+  if(_mctx.measureText(str).width <= px) return str;
+  let lo = 0, hi = str.length;
+  while(lo < hi){
+    const mid = (lo + hi + 1) >> 1;
+    if(_mctx.measureText(str.slice(0,mid) + "\u2026").width <= px) lo = mid; else hi = mid - 1;
+  }
+  return str.slice(0, lo).replace(/\s+$/,"") + "\u2026";
+}
+function renderMap(){
+  const rootsList = S.focus ? [S.focus] : S.roots;
+  const COL = 15, ROWH = 21, PAD = 12, R = 3.6;
+  const W = Math.min(window.innerWidth, 820);
+  const rows = [];                                  // one row per node, so no label can collide
+  const walk = (id, d) => {
+    const n = N(id);
+    const me = { id, d, y:0, kids:[] };
+    rows.push(me);
+    if(!n.collapsed) n.children.forEach(k => me.kids.push(walk(k, d+1)));
+    return me;
+  };
+  rootsList.forEach((r,i) => { if(i) rows.push(null); walk(r, 0); });   // null = gap between lineages
+  let slot = 0;
+  rows.forEach(r => { if(!r){ slot += 0.6; return; } r.y = PAD + 12 + slot * ROWH; slot++; });
+  const live = rows.filter(Boolean);
+  const x = d => PAD + d * COL;
+  const at = {}; live.forEach(r => at[r.id] = r);
+  const H = PAD + 20 + slot * ROWH;
+
+  let s = "";
+  live.forEach(r => {
+    r.kids.forEach(k => {
+      s += `<path class="lnk" d="M${x(r.d)+7} ${r.y+7} V${k.y} H${x(k.d)-4}"/>`;
+    });
+  });
+  live.forEach(r => {
+    N(r.id).hybrids.forEach(h => {
+      const a = at[h]; if(!a) return;
+      const mx = Math.max(x(a.d), x(r.d)) + 26;
+      s += `<path class="lnk hy" d="M${x(a.d)} ${a.y} Q${mx} ${(a.y+r.y)/2} ${x(r.d)} ${r.y}"/>`;
+    });
+  });
+  live.forEach(r => {
+    const n = N(r.id), dead = n.status === "dead";
+    const c = dead ? "var(--dead)" : hue(r.d);
+    s += `<circle cx="${x(r.d)}" cy="${r.y}" r="${R}" style="fill:${dead ? "var(--bg)" : c};stroke:${c}"/>`;
+    const lx = x(r.d) + 9;
+    const mark = n.status === "strong" ? "\u2605 " : n.status === "question" ? "? " : "";
+    const more = n.collapsed && n.children.length ? " +" + countAll(r.id) : "";
+    const cls = dead ? "dead" : n.status === "strong" ? "strong" : "";
+    const label = fitText(mark + n.text.replace(/\s+/g," ").trim() + more, W - lx - 10, n.status === "strong");
+    s += `<text class="${cls}" x="${lx}" y="${r.y + 4}">${esc(label)}</text>`;
+    s += `<rect class="hit" data-id="${r.id}" x="0" y="${r.y - 10}" width="${W}" height="${ROWH}"/>`;
+  });
+  $("#map").innerHTML = live.length
+    ? `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">${s}</svg>`
+    : `<div class="empty">Nothing to map yet.</div>`;
+}
+$("#map").addEventListener("click", e => {
+  const h = e.target.closest("[data-id]"); if(!h) return;
+  const id = h.dataset.id;
+  document.body.classList.remove("mapmode"); $("#btnMap").classList.remove("on");
+  revealNode(id); sel = id; render(); setTimeout(() => scrollToNode(id, true), 40);
+});
+$("#btnMap").addEventListener("click", () => {
+  const on = document.body.classList.toggle("mapmode");
+  $("#btnMap").classList.toggle("on", on);
+  $("#btnMap").title = on ? "Tree view" : "Map view";
+  if(on) renderMap();
+});
+
+/* ---------- search ---------- */
+$("#btnSearch").addEventListener("click", () => {
+  const closed = $("#searchwrap").classList.toggle("hide");
+  $("#brand").classList.toggle("hide", !closed);
+  $("#btnSearch").classList.toggle("on", !closed);
+  if(closed){ $("#q").value = ""; query = ""; $("#searchcount").textContent = ""; render(); }
+  else $("#q").focus();
+});
+$("#q").addEventListener("input", e => { query = e.target.value.trim(); render(); });
+
+/* ---------- import / export ---------- */
+function download(name, text, type){
+  const b = new Blob([text], { type: type || "text/plain" });
+  const u = URL.createObjectURL(b);
+  const a = document.createElement("a");
+  a.href = u; a.download = name; document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(u); a.remove(); }, 800);
+}
+function toMarkdown(){
+  const out = [];
+  const walk = (id, d) => {
+    const n = N(id);
+    out.push("  ".repeat(d) + "- " + n.text + (ST_GLYPH[n.status] || ""));
+    if(n.diverge) out.push("  ".repeat(d+1) + "- Δ " + n.diverge.replace(/\n/g, " "));
+    if(n.note)    out.push("  ".repeat(d+1) + "- ✎ " + n.note.replace(/\n/g, " "));
+    n.hybrids.forEach(h => { if(N(h)) out.push("  ".repeat(d+1) + "- ⤳ also from: " + N(h).text); });
+    n.children.forEach(c => walk(c, d+1));
+  };
+  S.roots.forEach(r => { walk(r, 0); out.push(""); });
+  return "# Ideaphylo — " + new Date().toISOString().slice(0,10) + "\n\n" + out.join("\n");
+}
+async function copyOrDownload(name, text, type){
+  try{
+    await navigator.clipboard.writeText(text);
+    toast("Copied to clipboard", "Download", () => download(name, text, type));
+  }catch(_){ download(name, text, type); toast("Downloaded"); }
+}
+$("#fileIn").addEventListener("change", e => {
+  const f = e.target.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try{
+      const d = JSON.parse(r.result);
+      if(!d.nodes || !d.roots) throw 0;
+      pushUndo();
+      S.nodes = d.nodes; S.roots = d.roots; S.focus = null; sel = null;
+      for(const id in S.nodes){
+        const n = S.nodes[id];
+        n.children = n.children || []; n.hybrids = n.hybrids || [];
+        n.note = n.note || ""; n.diverge = n.diverge || ""; n.status = n.status || "";
+      }
+      render(); toast("Imported " + totalNodes() + " ideas");
+    }catch(_){ toast("That file isn’t an Ideaphylo export"); }
+  };
+  r.readAsText(f); e.target.value = "";
+});
+
+/* ---------- menu ---------- */
+$("#btnMenu").addEventListener("click", () => showSheet("#sheetMenu"));
+$("#sheetMenu").addEventListener("click", e => {
+  const b = e.target.closest("[data-m]"); if(!b) return;
+  const m = b.dataset.m;
+  if(m !== "help" && m !== "paste") closeSheet();
+  if(m === "expand"){ for(const k in S.nodes) S.nodes[k].collapsed = false; render(); }
+  if(m === "collapse"){ for(const k in S.nodes) if(S.nodes[k].parent) S.nodes[k].collapsed = true; render(); }
+  if(m === "unfocus"){ S.focus = null; render(); scroller.scrollTop = 0; }
+  if(m === "exportmd") copyOrDownload("ideaphylo.md", toMarkdown(), "text/markdown");
+  if(m === "exportjson") copyOrDownload("ideaphylo.json", JSON.stringify({nodes:S.nodes, roots:S.roots}, null, 1), "application/json");
+  if(m === "importjson") $("#fileIn").click();
+  if(m === "theme"){ setTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light"); }
+  if(m === "demo"){ closeSheet(); askChoice("Load the example tree?", [
+      { label:"Add it alongside my ideas", fn(){ pushUndo(); seed(false); render(); } },
+      { label:"Replace everything with it", danger:true, fn(){ pushUndo(); seed(true); render(); } }
+    ]); }
+  if(m === "wipe"){ closeSheet(); askChoice("Delete every idea?", [
+      { label:"Yes, delete all "+totalNodes()+" ideas", danger:true,
+        fn(){ pushUndo(); S.nodes = {}; S.roots = []; S.focus = null; sel = null; render(); toast("Cleared", "Undo", undo); } }
+    ]); }
+  if(m === "paste"){ closeSheet(); askText("Paste an outline", "", v => {
+      if(!v.trim()) return;
+      pushUndo();
+      const { first, grown } = insertItems(parseOutline(v), sel || null, null);
+      render(); if(first) scrollToNode(first, true);
+      toast(grown ? "Grew " + grown + " ideas" : "Nothing to grow");
+    }, "Indent with spaces or tabs to nest:\n\nOrigin idea\n  A variation\n    A variation of that\n  Another variation"); }
+  if(m === "help") showHelp();
+});
+function setTheme(t){
+  document.documentElement.dataset.theme = t;
+  S.theme = t; save();
+  const mc = document.querySelector('meta[name=theme-color]');
+  if(mc) mc.setAttribute("content", t === "light" ? "#ffffff" : "#0e1116");
+}
+
+/* ---------- help ---------- */
+function showHelp(){
+  $("#sheetHelp").querySelector("h3").textContent = "How it works";
+  $("#helpBody").innerHTML = `
+    <p>An idea is never born from nothing. Each node here <b>descends</b> from the one above it — a copy with a mutation. Read a path from root to tip and you get the story of how a thought changed.</p>
+    <div class="sect">Growing the tree</div>
+    <ul>
+      <li><b>Tap</b> an idea to select it. Everything you type in the bar below becomes its descendant.</li>
+      <li><b>Tap it again</b> to edit the text in place.</li>
+      <li><b>Long-press</b> for the full action sheet.</li>
+      <li><b>Swipe right</b> on a row to make it descend from the idea above; <b>swipe left</b> to promote it up a level.</li>
+      <li>Paste a whole indented outline into the bar — it grows the entire subtree at once.</li>
+    </ul>
+    <div class="sect">Reading it</div>
+    <ul>
+      <li><b>Tap the circle</b> to collapse or expand a branch. The number is how many ideas are hidden.</li>
+      <li><b>Focus</b> (in the action sheet) makes any idea the temporary root, so deep trees stay readable on a phone. Use the breadcrumbs to climb back out.</li>
+      <li><b>◱ Map</b> shows the whole tree as a classic cladogram. Tap any tip to jump to it.</li>
+    </ul>
+    <div class="sect">Marking what happened</div>
+    <ul>
+      <li><b>Δ Change</b> records what this idea mutated <i>away from</i> its parent — the single most useful field here.</li>
+      <li><b>★ thriving</b>, <b>? untested</b>, <b>✕ dead end</b>. Dead ends are worth keeping: an extinct branch still tells you the territory was explored.</li>
+      <li><b>⤳ Merge</b> links an idea to a second ancestor, for the hybrids — the ones born where two lineages met.</li>
+    </ul>
+    <div class="sect">Keeping it</div>
+    <ul>
+      <li>Everything saves to this browser automatically. Nothing leaves the device.</li>
+      <li>Export to JSON (to reload later) or Markdown (to paste anywhere) from the ☰ menu.</li>
+      <li>On iOS, <i>Share → Add to Home Screen</i> makes it open like an app.</li>
+    </ul>
+    <div class="sect">On a keyboard</div>
+    <ul>
+      <li><kbd>↑</kbd><kbd>↓</kbd> move the selection, <kbd>←</kbd><kbd>→</kbd> collapse and expand, <kbd>Enter</kbd> edits,
+      <kbd>Tab</kbd>/<kbd>⇧Tab</kbd> re-parent, <kbd>⌘Z</kbd> undoes.</li>
+    </ul>`;
+  $("#helpClose").textContent = "Got it";
+  $("#helpClose").onclick = closeSheet;
+  showSheet("#sheetHelp");
+}
+
+/* ---------- keyboard (desktop convenience) ---------- */
+document.addEventListener("keydown", e => {
+  const inField = /INPUT|TEXTAREA/.test(document.activeElement.tagName);
+  const mod = e.metaKey || e.ctrlKey;
+  if(mod && e.key.toLowerCase() === "z"){ e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
+  if(e.key === "Escape"){ if(pick) endPick(); else if(openSheet) closeSheet(); else if(query){ $("#q").value=""; query=""; render(); } return; }
+  if(inField) return;
+  const rows = rowsToRender(), i = rows.findIndex(r => r.id === sel);
+  if(e.key === "ArrowDown"){ e.preventDefault();
+    const next = rows[i < 0 ? 0 : Math.min(rows.length-1, i+1)];
+    if(next){ sel = next.id; render(); scrollToNode(sel); } }
+  else if(e.key === "ArrowUp"){ e.preventDefault(); if(i > 0){ sel = rows[i-1].id; render(); scrollToNode(sel); } }
+  else if(e.key === "ArrowRight" && sel){ e.preventDefault(); if(N(sel).children.length && N(sel).collapsed){ N(sel).collapsed = false; render(); } }
+  else if(e.key === "ArrowLeft" && sel){ e.preventDefault(); const n = N(sel);
+    if(n.children.length && !n.collapsed){ n.collapsed = true; render(); } else if(n.parent){ sel = n.parent; render(); scrollToNode(sel); } }
+  else if(e.key === "Enter" && sel){ e.preventDefault(); startEdit(sel); }
+  else if(e.key === "Tab" && sel){ e.preventDefault(); pushUndo(); (e.shiftKey ? outdent : indent)(sel); render(); }
+  else if((e.key === "Backspace" || e.key === "Delete") && sel){ e.preventDefault(); openNodeSheet(sel); }
+});
+
+/* ---------- example tree ---------- */
+function seed(replace){
+  if(replace){ S.nodes = {}; S.roots = []; S.focus = null; sel = null; }
+  const spec = [
+    [0, "Ideas evolve like organisms", "", "strong", "The seed claim: variation, inheritance, selection apply to thoughts too."],
+    [1, "Copy an idea, introduce a small change, keep what survives", "Mechanism, not metaphor", "", ""],
+    [2, "Memetics: ideas as replicators with their own interests", "Treats the idea, not the thinker, as the unit of selection", "question", "Powerful framing, but hard to falsify — what counts as one meme?"],
+    [2, "Cultural evolution: populations of variants tracked statistically", "Drops the replicator language, keeps the population model", "strong", ""],
+    [3, "Model idea lineages the way biologists build phylogenies", "Borrows the method rather than the ontology", "strong", ""],
+    [4, "A phone app for growing idea trees by hand", "Applies it to one person's thinking instead of a whole culture", "", "You are here."],
+    [1, "Ideas are selected only for truth", "", "dead", "Dead end: plainly false — catchiness, comfort and status all select for ideas that aren’t true."],
+    [1, "The lone genius invents from nothing", "", "dead", "Contradicted by every history of simultaneous discovery."],
+  ];
+  const stack = [];
+  spec.forEach(([d, text, diverge, status, note]) => {
+    const parent = d === 0 ? null : stack[d-1];
+    const id = addChild(parent, text);
+    const n = N(id); n.diverge = diverge; n.status = status; n.note = note;
+    stack[d] = id; stack.length = d + 1;
+  });
+  sel = null;
+}
+
+/* ---------- mobile viewport / keyboard ---------- */
+function fitViewport(){
+  const vv = window.visualViewport;
+  document.documentElement.style.setProperty("--vh", (vv ? vv.height : window.innerHeight) + "px");
+}
+if(window.visualViewport){
+  visualViewport.addEventListener("resize", fitViewport);
+  visualViewport.addEventListener("scroll", fitViewport);
+}
+window.addEventListener("resize", () => { fitViewport(); if(document.body.classList.contains("mapmode")) renderMap(); });
+document.addEventListener("gesturestart", e => e.preventDefault());
+
+/* ---------- boot ---------- */
+(function init(){
+  fitViewport();
+  const had = load();
+  if(!had) seed(true);
+  setTheme(S.theme || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"));
+  render();
+  if(!had) setTimeout(showHelp, 500);
+  autosize();
+  window.addEventListener("beforeunload", () => { try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(_){} });
+})();
+</script>
+</body>
+</html>
